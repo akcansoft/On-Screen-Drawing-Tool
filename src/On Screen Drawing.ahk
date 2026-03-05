@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.0.2
+;@Ahk2Exe-SetFileVersion 1.1.0
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -12,7 +12,7 @@ On Screen Drawing Tool
 A lightweight on-screen drawing tool for annotating the screen with
 lines, rectangles, ellipses, circles, and freehand drawings.
 =========================
-Version: 1.0.2
+Version: 1.1.0
 Date: 05/03/2026
 Author: Mesut Akcan
 =========================
@@ -40,9 +40,11 @@ CoordMode("Mouse", "Screen")
 
 ; Load Settings from INI
 global iniFile := A_ScriptDir "\settings.ini"
-global defaultColors := [{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y", val: 0xFFFF00 }, { hk: "m",
-	val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v", val: 0x7F00FF }, { hk: "s", val: 0x8B4513 }, { hk: "w",
-		val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k", val: 0x000000 }]
+global defaultColors := [
+	{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y", val: 0xFFFF00 },
+	{ hk: "m", val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v", val: 0x7F00FF },
+	{ hk: "s", val: 0x8B4513 }, { hk: "w", val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k", val: 0x000000 }
+	]
 
 global cfg := {
 	line: {
@@ -66,7 +68,8 @@ global hotkeys := {
 	clear: IniRead(iniFile, "Hotkeys", "ClearDrawing", "Esc"),
 	undo: IniRead(iniFile, "Hotkeys", "UndoDrawing", "Backspace"),
 	incLine: IniRead(iniFile, "Hotkeys", "IncreaseLineWidth", "^NumpadAdd"),
-	decLine: IniRead(iniFile, "Hotkeys", "DecreaseLineWidth", "^NumpadSub")
+	decLine: IniRead(iniFile, "Hotkeys", "DecreaseLineWidth", "^NumpadSub"),
+	help: IniRead(iniFile, "Hotkeys", "HotkeysHelp", "F1")
 }
 
 global colorList := []
@@ -113,10 +116,14 @@ global lastDrawingMonitorNum := 0
 
 global ui := {
 	overlay: "",
-	settings: ""
+	settings: "",
+	colorMarks: Map(),
+	lineWidthCtrl: "",
+	drawAlphaCtrl: ""
 }
 
 global needsUpdate := false
+global drawingCursorActive := false
 
 global gdi := {
 	token: 0,
@@ -150,6 +157,8 @@ if hotkeys.toggle
 	Hotkey(hotkeys.toggle, ToggleDrawingMode)
 if hotkeys.exit
 	Hotkey(hotkeys.exit, (*) => ExitApp())
+if hotkeys.help
+	Hotkey(hotkeys.help, ShowHotkeysHelp)
 
 HotIf (*) => WinActive("ahk_id " (ui.settings ? ui.settings.Hwnd : 0))
 Hotkey("Esc", CloseSettingsGui)
@@ -174,18 +183,35 @@ HotIf
 
 ;=============================================
 CloseSettingsGui(*) {
-	_DestroySettings()
+	_HideSettings()
 }
 
-; Helper to destroy settings GUI if it exists
-_DestroySettings(guiObj := "") {
+; Helper to completely destroy settings GUI (used on exit)
+_DestroySettings() {
 	global ui
-
-	target := IsObject(guiObj) ? guiObj : ui.settings
-	if (IsObject(target))
-		try target.Destroy()
+	if (IsObject(ui.settings))
+		try ui.settings.Destroy()
 
 	ui.settings := ""
+	if (ui.HasProp("colorMarks"))
+		ui.colorMarks.Clear()
+	ui.lineWidthCtrl := ""
+	ui.drawAlphaCtrl := ""
+}
+
+; Helper to hide settings GUI and optionally restore cursor
+_HideSettings(restoreCursor := true) {
+	global ui, drawingMode
+
+	if (IsObject(ui.settings) && ui.settings.Hwnd)
+		try ui.settings.Hide()
+
+	if (restoreCursor && drawingMode && IsObject(ui.overlay))
+		EnableDrawingCursor()
+}
+
+OnSettingsGuiClose(*) {
+	_HideSettings()
 }
 
 ; Helper to reset settings font
@@ -206,36 +232,38 @@ StartDrawingFromTray(*) {
 
 InitTrayMenu() {
 	global trayToggleLabel
-	trayToggleLabel := drawingMode ? "Stop Drawing" : "Start Drawing"
+	hkSuffix := "`t" FormatHotkeyLabel(hotkeys.toggle)
+	trayToggleLabel := (drawingMode ? "Stop Drawing" : "Start Drawing") . hkSuffix
 
 	A_TrayMenu.Delete()
 	A_TrayMenu.Add("About", (*) => About())
 	A_TrayMenu.Add("GitHub repo", (*) => Run("https://github.com/akcansoft/On-Screen-Drawing-Tool"))
 	A_TrayMenu.Add()
+	A_TrayMenu.Add("Hotkeys Help`t" . FormatHotkeyLabel(hotkeys.help), ShowHotkeysHelp)
 	A_TrayMenu.Add("Open settings.ini", OpenSettingsIniFromTray)
-	A_TrayMenu.Add("Hotkeys Help", ShowHotkeysHelpFromTray)
 	A_TrayMenu.Add("Reset to Defaults", ResetDefaultsFromTray)
 	A_TrayMenu.Add("Reload Script", (*) => Reload())
 	A_TrayMenu.Add()
 	A_TrayMenu.Add(trayToggleLabel, StartDrawingFromTray)
-	A_TrayMenu.Add("Exit", (*) => ExitApp())
+	A_TrayMenu.Add("Exit`t" . FormatHotkeyLabel(hotkeys.exit), (*) => ExitApp())
 	A_TrayMenu.Default := trayToggleLabel
 }
 
 UpdateTrayToggleMenu() {
 	global trayToggleLabel
-	newLabel := drawingMode ? "Stop Drawing" : "Start Drawing"
+	hkSuffix := "`t" FormatHotkeyLabel(hotkeys.toggle)
+	newLabel := (drawingMode ? "Stop Drawing" : "Start Drawing") . hkSuffix
 
 	if (trayToggleLabel = newLabel)
 		return
 
-	try A_TrayMenu.Rename(trayToggleLabel, newLabel)
-	catch {
+	try {
+		A_TrayMenu.Rename(trayToggleLabel, newLabel)
+		trayToggleLabel := newLabel
+		A_TrayMenu.Default := trayToggleLabel
+	} catch {
 		InitTrayMenu()
-		return
 	}
-	trayToggleLabel := newLabel
-	A_TrayMenu.Default := trayToggleLabel
 }
 
 ; Open settings.ini in default text editor from tray menu
@@ -247,14 +275,16 @@ OpenSettingsIniFromTray(*) {
 	Run('notepad.exe "' iniFile '"')
 }
 
-; Show hotkeys help message box from tray menu
-ShowHotkeysHelpFromTray(*) {
+; Show hotkeys help message box
+ShowHotkeysHelp(*) {
 	global hotkeys, colorHotkeys
 	colorKeys := ""
 	for hk, val in colorHotkeys
 		colorKeys .= (colorKeys = "" ? FormatHotkeyLabel(hk) : ", " FormatHotkeyLabel(hk))
 
 	txt := "Hotkeys:"
+	if (hotkeys.help)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.help) ": Show this help"
 	txt .= "`n" FormatHotkeyLabel(hotkeys.toggle) ": Toggle drawing mode"
 	if (hotkeys.exit)
 		txt .= "`n" FormatHotkeyLabel(hotkeys.exit) ": Exit app"
@@ -314,7 +344,8 @@ ResetDefaultsFromTray(*) {
 			. "ClearDrawing=Esc`n"
 			. "UndoDrawing=Backspace`n"
 			. "IncreaseLineWidth=^NumpadAdd`n"
-			. "DecreaseLineWidth=^NumpadSub`n`n"
+			. "DecreaseLineWidth=^NumpadSub`n"
+			. "HotkeysHelp=F1`n`n"
 			. "[Colors]`n"
 			. "r=0xFF0000`n"
 			. "g=0x00FF00`n"
@@ -444,7 +475,9 @@ ToggleDrawingMode(*) {
 	ui.overlay := Gui("+AlwaysOnTop -DPIScale -Caption +ToolWindow +E0x20")
 	ui.overlay.OnEvent("Close", (*) => ExitDrawingMode(false))
 	ui.overlay.Title := "Drawing Overlay"
-	ui.overlay.Show("NA x" activeMonitor.left " y" activeMonitor.top " w" activeMonitor.width " h" activeMonitor.height)
+	ui.overlay.Show("NA x" activeMonitor.left " y" activeMonitor.top " w" activeMonitor.width " h" activeMonitor.height
+	)
+	EnableDrawingCursor()
 
 	if (ui.overlay.Hwnd)
 		DllCall("InvalidateRect", "Ptr", ui.overlay.Hwnd, "Ptr", 0, "Int", 0)
@@ -494,6 +527,7 @@ ExitDrawingMode(UserInitiated := false) {
 	global currentShape, allShapes, cfg
 
 	SetTimer(UpdateTimer, 0)
+	DisableDrawingCursor()
 	drawingMode := false
 	drawing := false
 	needsUpdate := false
@@ -533,6 +567,46 @@ ExitDrawingMode(UserInitiated := false) {
 	UpdateTrayToggleMenu()
 }
 
+EnableDrawingCursor() {
+	global drawingCursorActive
+	static OCR_NORMAL := 32512
+	static IDC_PEN := 32631
+
+	if (drawingCursorActive)
+		return true
+
+	; Replace only the normal arrow cursor with the system pen cursor.
+	hPen := DllCall("LoadCursor", "Ptr", 0, "Ptr", IDC_PEN, "Ptr")
+	if (!hPen)
+		return false
+
+	hCopy := DllCall("CopyIcon", "Ptr", hPen, "Ptr")
+	if (!hCopy)
+		return false
+
+	if (!DllCall("SetSystemCursor", "Ptr", hCopy, "UInt", OCR_NORMAL)) {
+		DllCall("DestroyIcon", "Ptr", hCopy)
+		return false
+	}
+
+	drawingCursorActive := true
+	return true
+}
+
+DisableDrawingCursor() {
+	global drawingCursorActive
+	static SPI_SETCURSORS := 0x57
+
+	if (!drawingCursorActive)
+		return true
+
+	if (!DllCall("SystemParametersInfo", "UInt", SPI_SETCURSORS, "UInt", 0, "Ptr", 0, "UInt", 0))
+		return false
+
+	drawingCursorActive := false
+	return true
+}
+
 ReadIniBool(file, section, key, default := false) {
 	raw := Trim(IniRead(file, section, key, default ? "1" : "0"))
 	if (raw = "")
@@ -558,7 +632,8 @@ WM_ERASEBKGND_Handler(wParam, lParam, msg, hwnd) {
 WM_PAINT_Handler(wParam, lParam, msg, hwnd) {
 	global ui, gdi, activeMonitor
 
-	if (!drawingMode || !IsObject(ui.overlay) || hwnd != ui.overlay.Hwnd || !gdi.hdcMem || activeMonitor.width <= 0 || activeMonitor.height <= 0)
+	if (!drawingMode || !IsObject(ui.overlay) || hwnd != ui.overlay.Hwnd || !gdi.hdcMem || activeMonitor.width <= 0 ||
+		activeMonitor.height <= 0)
 		return
 
 	ps := Buffer(A_PtrSize == 8 ? 72 : 64) ; paint Struct Size
@@ -591,7 +666,7 @@ WM_LBUTTONDOWN(wParam, lParam, msg, hwnd) {
 
 	; Close settings window if open and clicked outside
 	if (IsObject(ui.settings) && ui.settings.Hwnd) {
-		_DestroySettings()
+		_HideSettings()
 	}
 
 	GetOverlayPointFromLParam(lParam, &x, &y, true)
@@ -704,68 +779,12 @@ WM_RBUTTONDOWN(wParam, lParam, msg, hwnd) {
 	if (!drawingMode || !IsObject(ui.overlay) || hwnd != ui.overlay.Hwnd)
 		return
 
-	if (IsObject(ui.settings))
-		_DestroySettings()
+	DisableDrawingCursor()
 
-	ui.settings := Gui("+AlwaysOnTop +ToolWindow -Caption Border")
-	ui.settings.Title := "Drawing Settings"
-	ui.settings.OnEvent("Close", (*) => (ui.settings := ""))
-	_ResetUISettingsFont()
-	activeRGB := drawColor & 0xFFFFFF
-	margin := 10
-	btnSize := 30
-	gap := 4
-	colorColumnCount := 3
-	colW := btnSize + gap
+	if (!IsObject(ui.settings) || !ui.settings.Hwnd)
+		_CreateSettingsGui()
 
-	curY := margin
-	for i, item in colorList {
-		val := item.val
-		hex := Format("{:06X}", val)
-		col := Mod(i - 1, colorColumnCount)
-		row := (i - 1) // colorColumnCount
-
-		bx := margin + col * colW
-		by := curY + row * (btnSize + gap)
-		btn := ui.settings.Add("Text", "x" bx " y" by " w" btnSize " h" btnSize " +Border +0x0100 Background" hex)
-		if (val = activeRGB) {
-			luminance := GetLuminance(val)
-			markColor := (luminance > 128) ? "000000" : "FFFFFF"
-			ui.settings.SetFont("s16 w1000")
-			ui.settings.Add("Text", "xp yp wp hp +Center +0x200 c" markColor " BackgroundTrans", "✓")
-			_ResetUISettingsFont()
-		}
-		btn.OnEvent("Click", ColorSelect.Bind(val, ui.settings))
-	}
-
-	rowCount := Ceil(colorList.Length / colorColumnCount)
-	gridBottom := curY + rowCount * (btnSize + gap)
-
-	; Line width control
-	ui.settings.AddText("x" margin " y" (gridBottom + 5), "Line width:")
-	ui.settings.AddEdit("vLineWidth yp-5 w40 x+2 Number", cfg.line.width).OnEvent("Change", (*) => UpdateLineWidth(ui.settings))
-	ui.settings.AddUpDown("Range" cfg.line.minWidth "-" cfg.line.maxWidth, cfg.line.width).OnEvent("Change", (*) => UpdateLineWidth(ui.settings))
-
-	; Opacity control
-	ui.settings.AddText("x" margin " y+12", "Opacity:")
-	ui.settings.AddEdit("vDrawAlpha yp-5 w50 x+6 Number", cfg.drawAlpha).OnEvent("Change", (*) => UpdateDrawAlpha(ui.settings))
-	ui.settings.AddUpDown("Range0-255", cfg.drawAlpha).OnEvent("Change", (*) => UpdateDrawAlpha(ui.settings))
-
-	; Quick actions (symbol buttons)
-	btnOpt := " w30 h32 +Border +Center +0x200 +0x100 BackgroundFAFAFA"
-	ui.settings.SetFont("s15 c2b8600", "Segoe MDL2 Assets")
-	btnUndo := ui.settings.AddText("x10 y+5" btnOpt, Chr(0xE7A7))
-	ui.settings.SetFont("c0059ff")
-	btnExitDraw := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xEE56))
-	ui.settings.SetFont("cff0000")
-	btnExitApp := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xE7E8)) ; ⏻
-	btnExitDraw.GetPos(&dX, &dY, &dW, &dH)
-	ui.settings.SetFont("s20")
-	ui.settings.AddText("x" dX - 5 " y" dY - 10 " w" dW " h" dH " +Center +0x200 BackgroundTrans +E0x20", "✕")
-	_ResetUISettingsFont()
-	btnUndo.OnEvent("Click", (*) => DeleteLastShape())
-	btnExitDraw.OnEvent("Click", (*) => ExitDrawingFromSettings())
-	btnExitApp.OnEvent("Click", (*) => ExitAppFromSettings())
+	_UpdateSettingsGui()
 
 	MouseGetPos(&mX, &mY)
 	ui.settings.Show("AutoSize x" mX " y" mY)
@@ -780,11 +799,99 @@ WM_RBUTTONDOWN(wParam, lParam, msg, hwnd) {
 		WinMove(finalX, finalY, , , "ahk_id " ui.settings.Hwnd)
 }
 
+_CreateSettingsGui() {
+	global ui, activeMonitor, colorList, cfg
+	ui.settings := Gui("+AlwaysOnTop +ToolWindow -Caption Border")
+	ui.settings.Title := "Drawing Settings"
+	ui.settings.OnEvent("Close", OnSettingsGuiClose)
+	_ResetUISettingsFont()
+	margin := 10
+	btnSize := 30
+	gap := 4
+	colorColumnCount := 3
+	colW := btnSize + gap
+
+	ui.colorMarks.Clear()
+	curY := margin
+	for i, item in colorList {
+		val := item.val
+		hex := Format("{:06X}", val)
+		col := Mod(i - 1, colorColumnCount)
+		row := (i - 1) // colorColumnCount
+
+		bx := margin + col * colW
+		by := curY + row * (btnSize + gap)
+		btn := ui.settings.Add("Text", "x" bx " y" by " w" btnSize " h" btnSize " +Border +0x0100 Background" hex)
+
+		luminance := GetLuminance(val)
+		markColor := (luminance > 128) ? "000000" : "FFFFFF"
+		ui.settings.SetFont("s16 w1000")
+		chk := ui.settings.Add("Text", "xp yp wp hp +Center +0x200 c" markColor " BackgroundTrans", "")
+		_ResetUISettingsFont()
+
+		btn.OnEvent("Click", ColorSelect.Bind(val, ui.settings))
+		chk.OnEvent("Click", ColorSelect.Bind(val, ui.settings))
+		ui.colorMarks[val] := chk
+	}
+
+	rowCount := Ceil(colorList.Length / colorColumnCount)
+	gridBottom := curY + rowCount * (btnSize + gap)
+
+	; Line width control
+	ui.settings.AddText("x" margin " y" (gridBottom + 5), "Line width:")
+	ui.lineWidthCtrl := ui.settings.AddEdit("vLineWidth yp-5 w40 x+2 Number", cfg.line.width)
+	ui.lineWidthCtrl.OnEvent("Change", (*) => UpdateLineWidth(ui.settings))
+	ui.settings.AddUpDown("Range" cfg.line.minWidth "-" cfg.line.maxWidth, cfg.line.width).OnEvent("Change", (*) =>
+		UpdateLineWidth(ui.settings))
+
+	; Opacity control
+	ui.settings.AddText("x" margin " y+12", "Opacity:")
+	ui.drawAlphaCtrl := ui.settings.AddEdit("vDrawAlpha yp-5 w50 x+6 Number", cfg.drawAlpha)
+	ui.drawAlphaCtrl.OnEvent("Change", (*) => UpdateDrawAlpha(ui.settings))
+	ui.settings.AddUpDown("Range0-255", cfg.drawAlpha).OnEvent("Change", (*) => UpdateDrawAlpha(ui.settings))
+
+	; Quick actions (symbol buttons)
+	btnOpt := " w30 h32 +Border +Center +0x200 +0x100 BackgroundFAFAFA"
+	iconFont := "Segoe MDL2 Assets"
+	try {
+		if RegRead("HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", "Segoe Fluent Icons (TrueType)")
+			iconFont := "Segoe Fluent Icons"
+	}
+	ui.settings.SetFont("s15 c2b8600", iconFont)
+	btnUndo := ui.settings.AddText("x10 y+5" btnOpt, Chr(0xE7A7))
+	ui.settings.SetFont("c0059ff")
+	btnExitDraw := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xEE56))
+	ui.settings.SetFont("cff0000")
+	btnExitApp := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xE7E8)) ; ⏻
+	btnExitDraw.GetPos(&dX, &dY, &dW, &dH)
+	ui.settings.SetFont("s20")
+	chkExit := ui.settings.AddText("x" dX - 5 " y" dY - 10 " w" dW " h" dH " +Center +0x200 BackgroundTrans +E0x20",
+		"✕")
+	_ResetUISettingsFont()
+
+	btnUndo.OnEvent("Click", (*) => DeleteLastShape())
+	btnExitDraw.OnEvent("Click", (*) => ExitDrawingFromSettings())
+	btnExitApp.OnEvent("Click", (*) => ExitAppFromSettings())
+	chkExit.OnEvent("Click", (*) => ExitDrawingFromSettings())
+}
+
+_UpdateSettingsGui() {
+	global ui, cfg, drawColor
+	activeRGB := drawColor & 0xFFFFFF
+	for val, chkCtrl in ui.colorMarks {
+		chkCtrl.Text := (val = activeRGB) ? "✓" : ""
+	}
+	if (ui.lineWidthCtrl.Value != cfg.line.width)
+		ui.lineWidthCtrl.Value := cfg.line.width
+	if (ui.drawAlphaCtrl.Value != cfg.drawAlpha)
+		ui.drawAlphaCtrl.Value := cfg.drawAlpha
+}
+
 ; Toolbar & Color Operations
 ColorSelect(colorVal, gui, *) {
 	global drawColor
 	drawColor := ARGB(colorVal, cfg.drawAlpha)
-	_DestroySettings(gui)
+	_HideSettings()
 }
 
 UpdateLineWidth(gui, *) {
@@ -803,12 +910,12 @@ UpdateDrawAlpha(gui, *) {
 }
 
 ExitDrawingFromSettings(*) {
-	_DestroySettings()
+	_HideSettings(false)
 	ExitDrawingMode(false)
 }
 
 ExitAppFromSettings(*) {
-	_DestroySettings()
+	_HideSettings(false)
 	ExitApp()
 }
 
@@ -909,7 +1016,8 @@ IsMouseOnActiveMonitor() {
 	if (!IsObject(activeMonitor) || activeMonitor.width <= 0 || activeMonitor.height <= 0)
 		return false
 	MouseGetPos(&mX, &mY)
-	return (mX >= activeMonitor.left && mX < activeMonitor.right && mY >= activeMonitor.top && mY < activeMonitor.bottom)
+	return (mX >= activeMonitor.left && mX < activeMonitor.right && mY >= activeMonitor.top && mY < activeMonitor.bottom
+	)
 }
 
 GetMouseMonitorInfo() {
@@ -951,13 +1059,14 @@ BuildPointsStr(points) {
 	if (!IsObject(points) || points.Length < 2)
 		return ""
 	str := points[1][1] "," points[1][2]
-	Loop points.Length - 1
+	loop points.Length - 1
 		str .= "|" points[A_Index + 1][1] "," points[A_Index + 1][2]
 	return str
 }
 
 DrawShapesToGraphics(G, shapesArray) {
 	lastPenColor := -1, lastPenWidth := -1, pPen := 0
+	lastBrushColor := -1, pBrush := 0
 
 	for index, shape in shapesArray {
 		if (!IsObject(shape) || !shape.HasProp("type"))
@@ -973,6 +1082,13 @@ DrawShapesToGraphics(G, shapesArray) {
 			lastPenWidth := shape.width
 		}
 
+		if (shape.type = "arrow" && shape.color != lastBrushColor) {
+			if (pBrush)
+				Gdip_DeleteBrush(pBrush)
+			pBrush := Gdip_BrushCreateSolid(shape.color)
+			lastBrushColor := shape.color
+		}
+
 		try {
 			switch shape.type {
 				case "free":
@@ -982,32 +1098,27 @@ DrawShapesToGraphics(G, shapesArray) {
 						Gdip_DrawLines(G, pPen, shape.pointsStr)
 					}
 				case "rect":
-					if (_ShapeHasCoords(shape))
-						Gdip_DrawRectangle(G, pPen,
-							Min(shape.startX, shape.endX),
-							Min(shape.startY, shape.endY),
-							Abs(shape.endX - shape.startX),
-							Abs(shape.endY - shape.startY))
+					Gdip_DrawRectangle(G, pPen,
+						Min(shape.startX, shape.endX),
+						Min(shape.startY, shape.endY),
+						Abs(shape.endX - shape.startX),
+						Abs(shape.endY - shape.startY))
 				case "line":
-					if (_ShapeHasCoords(shape))
-						Gdip_DrawLine(G, pPen, shape.startX, shape.startY, shape.endX, shape.endY)
+					Gdip_DrawLine(G, pPen, shape.startX, shape.startY, shape.endX, shape.endY)
 				case "ellipse":
-					if (_ShapeHasCoords(shape))
-						Gdip_DrawEllipse(G, pPen,
-							Min(shape.startX, shape.endX),
-							Min(shape.startY, shape.endY),
-							Abs(shape.endX - shape.startX),
-							Abs(shape.endY - shape.startY))
+					Gdip_DrawEllipse(G, pPen,
+						Min(shape.startX, shape.endX),
+						Min(shape.startY, shape.endY),
+						Abs(shape.endX - shape.startX),
+						Abs(shape.endY - shape.startY))
 				case "circle":
-					if (_ShapeHasCenterRadius(shape))
-						Gdip_DrawEllipse(G, pPen,
-							shape.startX - shape.radius, shape.startY - shape.radius,
-							shape.radius * 2, shape.radius * 2)
+					Gdip_DrawEllipse(G, pPen,
+						shape.startX - shape.radius, shape.startY - shape.radius,
+						shape.radius * 2, shape.radius * 2)
 				case "arrow":
-					if (_ShapeHasCoords(shape))
-						DrawArrowGdip(G, pPen, shape.startX, shape.startY, shape.endX, shape.endY, shape.width,
-							shape.color
-						)
+					if (pBrush) {
+						DrawArrowGdip(G, pPen, pBrush, shape.startX, shape.startY, shape.endX, shape.endY, shape.width)
+					}
 			}
 		} catch Error as e {
 			OutputDebug("GDI+ Drawing Error [type=" shape.type ", idx=" index "]: " e.Message "`n")
@@ -1016,22 +1127,12 @@ DrawShapesToGraphics(G, shapesArray) {
 
 	if (pPen)
 		Gdip_DeletePen(pPen)
+	if (pBrush)
+		Gdip_DeleteBrush(pBrush)
 }
 
-; Common coordinate check for rect / line / ellipse / arrow
-_ShapeHasCoords(shape) {
-	return shape.HasProp("startX") && shape.HasProp("startY")
-		&& shape.HasProp("endX") && shape.HasProp("endY")
-}
-
-; Common coordinate check for circle
-_ShapeHasCenterRadius(shape) {
-	return shape.HasProp("startX") && shape.HasProp("startY")
-		&& shape.HasProp("radius")
-}
-
-; Draw an arrow from (x1, y1) to (x2, y2) with specified width and color
-DrawArrowGdip(G, pPen, x1, y1, x2, y2, width, color) {
+; Draw an arrow from (x1, y1) to (x2, y2) with specified width and cached brush
+DrawArrowGdip(G, pPen, pBrush, x1, y1, x2, y2, width) {
 	dx := x2 - x1
 	dy := y2 - y1
 	len := Sqrt((dx * dx) + (dy * dy))
@@ -1062,9 +1163,7 @@ DrawArrowGdip(G, pPen, x1, y1, x2, y2, width, color) {
 	Gdip_DrawLine(G, pPen, x1, y1, bx, by)
 
 	pPoints := x2 "," y2 "|" (bx + W1) "," (by + W2) "|" (bx - W1) "," (by - W2)
-	pBrush := Gdip_BrushCreateSolid(color)
 	Gdip_FillPolygon(G, pBrush, pPoints)
-	Gdip_DeleteBrush(pBrush)
 }
 
 ; Combine Alpha + RGB — alpha is always passed explicitly
@@ -1119,14 +1218,14 @@ InitDpiAwareness() {
 }
 
 About(*) {
-  msg := "
+	msg := "
 	(
-	AkcanSoft On Screen Drawing Tool v1.0.2`n
-	©2026 Mesut Akcan 
-	makcan@gmail.com
-	github.com/akcansoft
-	mesutakcan.blogspot.com
-	youtube.com/mesutakcan
-	)"  
-  MsgBox(msg, "About", "Iconi Owner") ; ui.overlay.Hwnd)
+		AkcanSoft On Screen Drawing Tool v1.1.0`n
+		©2026 Mesut Akcan 
+		makcan@gmail.com
+		github.com/akcansoft
+		mesutakcan.blogspot.com
+		youtube.com/mesutakcan
+	)"
+	MsgBox(msg, "About", "Iconi Owner") ; ui.overlay.Hwnd)
 }
