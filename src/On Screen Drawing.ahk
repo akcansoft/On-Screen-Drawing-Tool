@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.0.1
+;@Ahk2Exe-SetFileVersion 1.0.2
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -12,7 +12,7 @@ On Screen Drawing Tool
 A lightweight on-screen drawing tool for annotating the screen with
 lines, rectangles, ellipses, circles, and freehand drawings.
 =========================
-Version: 1.0.1
+Version: 1.0.2
 Date: 05/03/2026
 Author: Mesut Akcan
 =========================
@@ -209,6 +209,8 @@ InitTrayMenu() {
 	trayToggleLabel := drawingMode ? "Stop Drawing" : "Start Drawing"
 
 	A_TrayMenu.Delete()
+	A_TrayMenu.Add("About", (*) => About())
+	A_TrayMenu.Add("GitHub repo", (*) => Run("https://github.com/akcansoft/On-Screen-Drawing-Tool"))
 	A_TrayMenu.Add()
 	A_TrayMenu.Add("Open settings.ini", OpenSettingsIniFromTray)
 	A_TrayMenu.Add("Hotkeys Help", ShowHotkeysHelpFromTray)
@@ -1114,4 +1116,17 @@ InitDpiAwareness() {
 	}
 
 	return false
+}
+
+About(*) {
+  msg := "
+	(
+	AkcanSoft On Screen Drawing Tool v1.0.2`n
+	©2026 Mesut Akcan 
+	makcan@gmail.com
+	github.com/akcansoft
+	mesutakcan.blogspot.com
+	youtube.com/mesutakcan
+	)"  
+  MsgBox(msg, "About", "Iconi Owner") ; ui.overlay.Hwnd)
 }
