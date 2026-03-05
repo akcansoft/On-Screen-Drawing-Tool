@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.0.0
+;@Ahk2Exe-SetFileVersion 1.0.1
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -12,7 +12,7 @@ On Screen Drawing Tool
 A lightweight on-screen drawing tool for annotating the screen with
 lines, rectangles, ellipses, circles, and freehand drawings.
 =========================
-Version: 1.0.0
+Version: 1.0.1
 Date: 05/03/2026
 Author: Mesut Akcan
 =========================
@@ -22,7 +22,7 @@ akcansoft.blogspot.com
 youtube.com/mesutakcan
 =========================
 Detailed information, source code, compiled binaries, and more are available on GitHub:
-https://github.com/akcansoft/OnScreenDrawingTool
+https://github.com/akcansoft/On-Screen-Drawing-Tool
 =========================
 */
 
@@ -35,10 +35,10 @@ https://github.com/akcansoft/OnScreenDrawingTool
 if (!A_IsCompiled)
 	try TraySetIcon(A_ScriptDir "\app_icon.ico")
 
-InitDpiAwareness() ;
+InitDpiAwareness()
 CoordMode("Mouse", "Screen")
 
-; --- Load Settings from INI ---
+; Load Settings from INI
 global iniFile := A_ScriptDir "\settings.ini"
 global defaultColors := [{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y", val: 0xFFFF00 }, { hk: "m",
 	val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v", val: 0x7F00FF }, { hk: "s", val: 0x8B4513 }, { hk: "w",
@@ -135,7 +135,7 @@ GdiStartup() ; Initialize GDI+
 
 OnExit((*) => ExitDrawingMode(true))
 
-; --- Event Listeners ---
+; Event Listeners
 OnMessage(0x201, WM_LBUTTONDOWN) ; Left button down
 OnMessage(0x202, WM_LBUTTONUP)   ; Left button up
 OnMessage(0x200, WM_MOUSEMOVE)   ; Mouse move
@@ -145,7 +145,7 @@ OnMessage(0x14, WM_ERASEBKGND_Handler)
 
 InitTrayMenu()
 
-; --- Hotkeys ---
+; Hotkeys
 if hotkeys.toggle
 	Hotkey(hotkeys.toggle, ToggleDrawingMode)
 if hotkeys.exit
@@ -751,12 +751,12 @@ WM_RBUTTONDOWN(wParam, lParam, msg, hwnd) {
 
 	; Quick actions (symbol buttons)
 	btnOpt := " w30 h32 +Border +Center +0x200 +0x100 BackgroundFAFAFA"
-	ui.settings.SetFont("s15 c2b8600", "Segoe Fluent Icons")
+	ui.settings.SetFont("s15 c2b8600", "Segoe MDL2 Assets")
 	btnUndo := ui.settings.AddText("x10 y+5" btnOpt, Chr(0xE7A7))
 	ui.settings.SetFont("c0059ff")
-	btnExitDraw := ui.settings.AddText("x+3 yp" btnOpt, Chr(0xEE56))
+	btnExitDraw := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xEE56))
 	ui.settings.SetFont("cff0000")
-	btnExitApp := ui.settings.AddText("x+3 yp" btnOpt, Chr(0xE7E8)) ; ⏻
+	btnExitApp := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xE7E8)) ; ⏻
 	btnExitDraw.GetPos(&dX, &dY, &dW, &dH)
 	ui.settings.SetFont("s20")
 	ui.settings.AddText("x" dX - 5 " y" dY - 10 " w" dW " h" dH " +Center +0x200 BackgroundTrans +E0x20", "✕")
