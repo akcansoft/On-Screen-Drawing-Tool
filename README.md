@@ -22,11 +22,13 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 - Drawing tools: freehand, straight line, rectangle, ellipse, circle, arrow
 - Dynamic line width and opacity controls
 - Color palette with single-key shortcuts (fully configurable in `settings.ini`)
+- Built-in hotkeys help dialog (`F1` by default, configurable in `settings.ini`)
 - Undo last shape and clear all drawings while in drawing mode
 - Right-click in-place settings panel: color picker, line width, opacity, quick actions
 
 ![](docs/screen-shot-2.png)
 
+- Pen cursor while drawing mode is active
 - Tray icon menu for quick access to all main functions
 - Multi-monitor support — starts on the monitor the mouse cursor is on
 - Per-monitor DPI awareness with multiple fallbacks for mixed-scaling setups
@@ -66,6 +68,7 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 | Hotkey | Action |
 |---|---|
 | `Ctrl+F9` | Toggle drawing mode on/off |
+| `F1` | Show hotkeys help |
 | `Ctrl+Shift+F12` | Exit the application |
 
 ### While in drawing mode
@@ -128,12 +131,14 @@ The panel snaps to within the active monitor's bounds if it would otherwise go o
 
 Right-clicking the tray icon shows:
 
-- **Open settings.ini** — opens the file in Notepad
+- **About** — shows app and author information
+- **GitHub repo** — opens the project repository in the browser
 - **Hotkeys Help** — displays all active hotkeys in a message box
+- **Open settings.ini** — opens the file in Notepad
 - **Reset to Defaults** — overwrites `settings.ini` with built-in defaults and reloads the script
 - **Reload Script** — reloads the script (useful after manually editing `settings.ini`)
-- **Start Drawing / Stop Drawing** — toggles drawing mode (label updates dynamically)
-- **Exit**
+- **Start Drawing / Stop Drawing** — toggles drawing mode (label updates dynamically and shows the assigned hotkey)
+- **Exit** — closes the app and shows the assigned exit hotkey
 
 ## settings.ini Reference
 
@@ -158,6 +163,7 @@ ClearDrawing=Esc
 UndoDrawing=Backspace
 IncreaseLineWidth=^NumpadAdd
 DecreaseLineWidth=^NumpadSub
+HotkeysHelp=F1
 
 [Colors]
 r=0xFF0000
@@ -219,6 +225,23 @@ Gdip_all.ahk            ← GDI+ helper library (required)
 settings.ini            ← Runtime configuration (optional, auto-defaults)
 app_icon.ico            ← Tray and taskbar icon (optional)
 ```
+
+## Version History
+
+### v1.1.0 05/03/2026
+
+- Added a configurable `HotkeysHelp` action with `F1` as the default shortcut.
+- Added `About` and `GitHub repo` items to the tray menu.
+- Updated tray menu labels to show the assigned hotkeys for drawing toggle, help, and exit actions.
+- Added a pen cursor while drawing mode is active.
+- Improved the floating settings panel so it hides and reopens cleanly instead of being recreated each time.
+- Improved settings panel state syncing for the selected color, line width, and opacity controls.
+
+### v1.0.0 05/03/2026
+
+- Initial public release.
+- Included overlay drawing tools for freehand, line, rectangle, ellipse, circle, and arrow.
+- Included configurable hotkeys, color shortcuts, tray menu actions, and `settings.ini` support.
 
 ## Troubleshooting
 
