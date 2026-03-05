@@ -105,6 +105,7 @@ If you use the compiled `.exe`, AutoHotkey installation is not required.
 > Color hotkeys are only active while drawing mode is on and the mouse cursor is on the active monitor.
 
 ## Right-Click Settings Panel
+![](docs/screen-shot-2.png)
 
 Right-clicking anywhere on the overlay opens a compact floating panel that includes:
 
