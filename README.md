@@ -14,6 +14,8 @@ Lightweight on-screen annotation tool for Windows, built with AutoHotkey v2 and 
 
 Draw directly on top of any screen with multiple tools (freehand, line, rectangle, ellipse, circle, arrow), configurable hotkeys, and an INI-based settings system. Run it as source (`.ahk`) or as a compiled standalone `.exe`.
 
+![](docs/screen-shot-1.png)
+
 ## Highlights
 
 - Fast overlay drawing with GDI+ anti-aliased rendering
@@ -22,6 +24,9 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 - Color palette with single-key shortcuts (fully configurable in `settings.ini`)
 - Undo last shape and clear all drawings while in drawing mode
 - Right-click in-place settings panel: color picker, line width, opacity, quick actions
+
+![](docs/screen-shot-2.png)
+
 - Tray icon menu for quick access to all main functions
 - Multi-monitor support — starts on the monitor the mouse cursor is on
 - Per-monitor DPI awareness with multiple fallbacks for mixed-scaling setups
@@ -33,7 +38,7 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 - [AutoHotkey v2.x](https://www.autohotkey.com/) (for source usage only)
 - `Gdip_all.ahk` in the same folder as the main script
 
-If you use the compiled `.exe`, AutoHotkey installation is not required.
+If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 
 ## Quick Start
 
@@ -206,18 +211,6 @@ Use AutoHotkey hotkey syntax. Setting a value to empty disables that hotkey.
 - Anti-aliasing (GDI+ smoothing mode 4) is applied to all rendering.
 - Switching to a different monitor resets the shape list and captures a fresh screenshot.
 
-## Build EXE (Ahk2Exe)
-
-Compile `On Screen Drawing.ahk` with Ahk2Exe (included in the AutoHotkey tools package):
-
-1. Open Ahk2Exe.
-2. **Source:** `On Screen Drawing.ahk`
-3. **Destination:** choose your output `.exe` path
-4. **Icon (optional):** `app_icon.ico`
-5. Click **Compile**.
-
-After compiling, place `settings.ini` next to the `.exe` to allow settings changes without recompiling.
-
 ## Project Structure
 
 ```
@@ -246,14 +239,6 @@ app_icon.ico            ← Tray and taskbar icon (optional)
 **Shapes disappear when re-entering drawing mode**
 - Check that `ClearOnExit` is set to `false` in `settings.ini`.
 - Note: switching to a different monitor always resets the shape list.
-
-## Roadmap Ideas
-
-- Save / export annotations as image
-- Text annotation tool
-- Filled shape variants
-- Click-through toggle (draw and interact with windows beneath simultaneously)
-- Custom UI themes
 
 ## Contributing
 
