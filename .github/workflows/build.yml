@@ -1,0 +1,91 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      # 1) Repo'yu çek
+      - uses: actions/checkout@v4
+
+      # 2) AutoHotkey + Ahk2Exe indir
+      - name: AutoHotkey ve Ahk2Exe İndir
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.20/AutoHotkey_2.0.20.zip" `
+            -OutFile "ahk.zip"
+
+          Invoke-WebRequest `
+            -Uri "https://github.com/AutoHotkey/Ahk2Exe/releases/download/Ahk2Exe1.1.37.02a0a/Ahk2Exe1.1.37.02a0.zip" `
+            -OutFile "compiler.zip"
+
+          Expand-Archive ahk.zip -DestinationPath ahk
+          Expand-Archive compiler.zip -DestinationPath ahk
+
+      # 3) Derleme
+      - name: Derleme (x64 ve x32)
+        shell: pwsh
+        run: |
+          # =============================
+          # SADECE BUNU DEĞİŞTİR
+          # =============================
+          $ahk_file = "src/On Screen Drawing.ahk"
+          # =============================
+
+          # Dosya adını al
+          $baseName = [System.IO.Path]::GetFileNameWithoutExtension($ahk_file)
+
+          # Boşlukları "-" yap
+          $exeName = $baseName -replace " ", "-"
+
+          $exeName32 = "$exeName-x32.exe"
+          $exeName64 = "$exeName-x64.exe"
+
+          # dist klasörü oluştur
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $compiler = "ahk\Ahk2Exe.exe"
+          $ahk64    = "ahk\AutoHotkey64.exe"
+          $ahk32    = "ahk\AutoHotkey32.exe"
+
+          if (!(Test-Path $compiler)) { Write-Error "Ahk2Exe bulunamadı"; exit 1 }
+          if (!(Test-Path $ahk64)) { Write-Error "AutoHotkey64 bulunamadı"; exit 1 }
+          if (!(Test-Path $ahk32)) { Write-Error "AutoHotkey32 bulunamadı"; exit 1 }
+
+          Push-Location src
+
+          # x64
+          & "..\$compiler" `
+            /in "$([System.IO.Path]::GetFileName($ahk_file))" `
+            /base "..\$ahk64" `
+            /icon "app_icon.ico" `
+            /out "..\dist\$exeName64"
+
+          # x32
+          & "..\$compiler" `
+            /in "$([System.IO.Path]::GetFileName($ahk_file))" `
+            /base "..\$ahk32" `
+            /icon "app_icon.ico" `
+            /out "..\dist\$exeName32"
+
+          Pop-Location
+
+          Write-Host "=== dist klasörü içeriği ==="
+          Get-ChildItem dist
+
+      # 4) Release oluştur
+      - name: Release Oluştur
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
