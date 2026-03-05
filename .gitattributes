@@ -1,0 +1,9 @@
+# Executable files
+*.exe export-ignore
+
+# Docs images
+docs/ export-ignore
+
+.github/ export-ignore
+
+.gitattributes export-ignore
