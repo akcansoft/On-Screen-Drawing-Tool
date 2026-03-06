@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.1.0
+;@Ahk2Exe-SetFileVersion 1.2.0
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -12,8 +12,7 @@ On Screen Drawing Tool
 A lightweight on-screen drawing tool for annotating the screen with
 lines, rectangles, ellipses, circles, and freehand drawings.
 =========================
-Version: 1.1.0
-Date: 05/03/2026
+Date: 06/03/2026
 Author: Mesut Akcan
 =========================
 github.com/akcansoft
@@ -38,13 +37,17 @@ if (!A_IsCompiled)
 InitDpiAwareness()
 CoordMode("Mouse", "Screen")
 
+App := {
+	Name: "akcanSoft On Screen Drawing Tool",
+	Version: "1.2.0",
+}
+
 ; Load Settings from INI
 global iniFile := A_ScriptDir "\settings.ini"
-global defaultColors := [
-	{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y", val: 0xFFFF00 },
-	{ hk: "m", val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v", val: 0x7F00FF },
-	{ hk: "s", val: 0x8B4513 }, { hk: "w", val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k", val: 0x000000 }
-	]
+global defaultColors := [{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y",
+	val: 0xFFFF00 }, { hk: "m", val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v", val: 0x7F00FF }, { hk: "s",
+		val: 0x8B4513 }, { hk: "w", val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k", val: 0x000000 }
+]
 
 global cfg := {
 	line: {
@@ -67,6 +70,7 @@ global hotkeys := {
 	exit: IniRead(iniFile, "Hotkeys", "ExitApp", "^+F12"),
 	clear: IniRead(iniFile, "Hotkeys", "ClearDrawing", "Esc"),
 	undo: IniRead(iniFile, "Hotkeys", "UndoDrawing", "Backspace"),
+	redo: IniRead(iniFile, "Hotkeys", "RedoDrawing", "+Backspace"),
 	incLine: IniRead(iniFile, "Hotkeys", "IncreaseLineWidth", "^NumpadAdd"),
 	decLine: IniRead(iniFile, "Hotkeys", "DecreaseLineWidth", "^NumpadSub"),
 	help: IniRead(iniFile, "Hotkeys", "HotkeysHelp", "F1")
@@ -103,6 +107,7 @@ global drawing := false
 global startX := 0, startY := 0
 global currentShape := {}
 global allShapes := []
+global redoStack := []
 global activeMonitor := {
 	num: 0,
 	left: 0,
@@ -168,6 +173,8 @@ if hotkeys.clear
 	Hotkey(hotkeys.clear, ClearDrawing)
 if hotkeys.undo
 	Hotkey(hotkeys.undo, DeleteLastShape)
+if hotkeys.redo
+	Hotkey(hotkeys.redo, RedoLastShape)
 if hotkeys.incLine
 	Hotkey(hotkeys.incLine, AdjustLineWidthUp)
 if hotkeys.decLine
@@ -175,6 +182,8 @@ if hotkeys.decLine
 
 Hotkey("WheelUp", AdjustLineWidthUp)
 Hotkey("WheelDown", AdjustLineWidthDown)
+Hotkey("XButton1", DeleteLastShape)
+Hotkey("XButton2", RedoLastShape)
 
 for hk, val in colorHotkeys
 	Hotkey(hk, SetDrawColor.Bind(val))
@@ -237,9 +246,9 @@ InitTrayMenu() {
 
 	A_TrayMenu.Delete()
 	A_TrayMenu.Add("About", (*) => About())
+	A_TrayMenu.Add("Hotkeys Help`t" . FormatHotkeyLabel(hotkeys.help), ShowHotkeysHelp)
 	A_TrayMenu.Add("GitHub repo", (*) => Run("https://github.com/akcansoft/On-Screen-Drawing-Tool"))
 	A_TrayMenu.Add()
-	A_TrayMenu.Add("Hotkeys Help`t" . FormatHotkeyLabel(hotkeys.help), ShowHotkeysHelp)
 	A_TrayMenu.Add("Open settings.ini", OpenSettingsIniFromTray)
 	A_TrayMenu.Add("Reset to Defaults", ResetDefaultsFromTray)
 	A_TrayMenu.Add("Reload Script", (*) => Reload())
@@ -275,42 +284,6 @@ OpenSettingsIniFromTray(*) {
 	Run('notepad.exe "' iniFile '"')
 }
 
-; Show hotkeys help message box
-ShowHotkeysHelp(*) {
-	global hotkeys, colorHotkeys
-	colorKeys := ""
-	for hk, val in colorHotkeys
-		colorKeys .= (colorKeys = "" ? FormatHotkeyLabel(hk) : ", " FormatHotkeyLabel(hk))
-
-	txt := "Hotkeys:"
-	if (hotkeys.help)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.help) ": Show this help"
-	txt .= "`n" FormatHotkeyLabel(hotkeys.toggle) ": Toggle drawing mode"
-	if (hotkeys.exit)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.exit) ": Exit app"
-	if (hotkeys.clear)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.clear) ": Clear drawing"
-	if (hotkeys.undo)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.undo) ": Delete last shape`n"
-	if (hotkeys.incLine)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.incLine) ": Increase line width"
-	if (hotkeys.decLine)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.decLine) ": Decrease line width"
-
-	txt .= "`nWheelUp/WheelDown: Line width +/-`n"
-
-	txt .= "`nRight click: Open settings panel"
-	txt .= "`nShift: Line"
-	txt .= "`nCtrl: Rect"
-	txt .= "`nAlt: Ellipse"
-	txt .= "`nCtrl+Alt: Circle"
-	txt .= "`nCtrl+Shift: Arrow`n"
-	if (colorKeys != "")
-		txt .= "`nColor hotkeys: " colorKeys
-
-	MsgBox(txt, "Hotkeys Help", "Iconi")
-}
-
 ; Helper to format hotkey labels for display (e.g. "^+F12" -> "Ctrl+Shift+F12")
 FormatHotkeyLabel(hk) {
 	if (hk = "")
@@ -343,6 +316,7 @@ ResetDefaultsFromTray(*) {
 			. "ExitApp=^+F12`n"
 			. "ClearDrawing=Esc`n"
 			. "UndoDrawing=Backspace`n"
+			. "RedoDrawing=+Backspace`n"
 			. "IncreaseLineWidth=^NumpadAdd`n"
 			. "DecreaseLineWidth=^NumpadSub`n"
 			. "HotkeysHelp=F1`n`n"
@@ -733,6 +707,7 @@ WM_LBUTTONUP(wParam, lParam, msg, hwnd) {
 		valid := false
 
 	if (valid) {
+		redoStack := []
 		allShapes.Push(shapeToFinalize)
 		if (!_AppendShapeToBaked(shapeToFinalize))
 			RefreshBakedBuffer()
@@ -826,7 +801,7 @@ _CreateSettingsGui() {
 		luminance := GetLuminance(val)
 		markColor := (luminance > 128) ? "000000" : "FFFFFF"
 		ui.settings.SetFont("s16 w1000")
-		chk := ui.settings.Add("Text", "xp yp wp hp +Center +0x200 c" markColor " BackgroundTrans", "")
+		chk := ui.settings.AddText("xp yp wp hp +Center +0x200 c" markColor " BackgroundTrans", "")
 		_ResetUISettingsFont()
 
 		btn.OnEvent("Click", ColorSelect.Bind(val, ui.settings))
@@ -851,25 +826,36 @@ _CreateSettingsGui() {
 	ui.settings.AddUpDown("Range0-255", cfg.drawAlpha).OnEvent("Change", (*) => UpdateDrawAlpha(ui.settings))
 
 	; Quick actions (symbol buttons)
-	btnOpt := " w30 h32 +Border +Center +0x200 +0x100 BackgroundFAFAFA"
+	btnOpt := " w30 h30 +Border +Center +0x200 +0x100 BackgroundFAFAFA"
 	iconFont := "Segoe MDL2 Assets"
 	try {
-		if RegRead("HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", "Segoe Fluent Icons (TrueType)")
-			iconFont := "Segoe Fluent Icons"
+		RegRead("HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts", "Segoe Fluent Icons (TrueType)")
+		iconFont := "Segoe Fluent Icons"
 	}
-	ui.settings.SetFont("s15 c2b8600", iconFont)
+	ui.settings.SetFont("s14 c2b8600", iconFont)
 	btnUndo := ui.settings.AddText("x10 y+5" btnOpt, Chr(0xE7A7))
+	btnRedo := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xE7A6))
 	ui.settings.SetFont("c0059ff")
+	btnClear := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xED62)) ; E74D EF19
+
+	; Last row buttons: Help, Exit Drawing, Exit App
+	btnHelp := ui.settings.AddText("x10 y+5" btnOpt, Chr(0xE897))
 	btnExitDraw := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xEE56))
 	ui.settings.SetFont("cff0000")
 	btnExitApp := ui.settings.AddText("x+" gap " yp" btnOpt, Chr(0xE7E8)) ; ⏻
+
 	btnExitDraw.GetPos(&dX, &dY, &dW, &dH)
 	ui.settings.SetFont("s20")
-	chkExit := ui.settings.AddText("x" dX - 5 " y" dY - 10 " w" dW " h" dH " +Center +0x200 BackgroundTrans +E0x20",
+	chkExit := ui.settings.AddText("x" dX - 5 " y" dY - 10 " w" dW " h" dH " cRed +Center +0x200 BackgroundTrans +E0x20",
 		"✕")
 	_ResetUISettingsFont()
 
 	btnUndo.OnEvent("Click", (*) => DeleteLastShape())
+	btnUndo.OnEvent("DoubleClick", (*) => DeleteLastShape())
+	btnRedo.OnEvent("Click", (*) => RedoLastShape())
+	btnRedo.OnEvent("DoubleClick", (*) => RedoLastShape())
+	btnClear.OnEvent("Click", (*) => ClearDrawing())
+	btnHelp.OnEvent("Click", (*) => ShowHotkeysHelp())
 	btnExitDraw.OnEvent("Click", (*) => ExitDrawingFromSettings())
 	btnExitApp.OnEvent("Click", (*) => ExitAppFromSettings())
 	chkExit.OnEvent("Click", (*) => ExitDrawingFromSettings())
@@ -920,26 +906,56 @@ ExitAppFromSettings(*) {
 }
 
 ClearDrawing(*) {
-	global ui
-	global allShapes, needsUpdate
+	global ui, gdi
+	global allShapes, redoStack, needsUpdate
 	if (!drawingMode)
 		return
 	allShapes := []
+	redoStack := []
+
+	; Clear the baked graphics properly before redrawing the background
+	if (gdi.G_Baked)
+		DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", 0)
+
 	RefreshBakedBuffer()
 	UpdateBuffer()
+	needsUpdate := true
 	if (IsObject(ui.overlay))
 		DllCall("InvalidateRect", "Ptr", ui.overlay.Hwnd, "Ptr", 0, "Int", 0)
-	needsUpdate := false
 }
 
 DeleteLastShape(*) {
-	global ui
-	global allShapes
+	global ui, gdi
+	global allShapes, redoStack, needsUpdate
 	if (!drawingMode || !allShapes.Length)
 		return
-	allShapes.Pop()
+	redoStack.Push(allShapes.Pop())
+
+	; Clear the baked graphics properly before redrawing everything, otherwise removed shapes leave artifacts
+	if (gdi.G_Baked)
+		DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", 0)
+
 	RefreshBakedBuffer()
 	UpdateBuffer()
+	needsUpdate := true ; Crucial for the background rendering timer to synchronize
+	if (IsObject(ui.overlay))
+		DllCall("InvalidateRect", "Ptr", ui.overlay.Hwnd, "Ptr", 0, "Int", 0)
+}
+
+RedoLastShape(*) {
+	global ui, gdi
+	global allShapes, redoStack, needsUpdate
+	if (!drawingMode || !redoStack.Length)
+		return
+	shape := redoStack.Pop()
+	allShapes.Push(shape)
+	if (!_AppendShapeToBaked(shape)) {
+		if (gdi.G_Baked)
+			DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", 0)
+		RefreshBakedBuffer()
+	}
+	UpdateBuffer()
+	needsUpdate := true ; Crucial for the background rendering timer to synchronize
 	if (IsObject(ui.overlay))
 		DllCall("InvalidateRect", "Ptr", ui.overlay.Hwnd, "Ptr", 0, "Int", 0)
 }
@@ -1217,15 +1233,66 @@ InitDpiAwareness() {
 	return false
 }
 
+; Show hotkeys help message box
+ShowHotkeysHelp(*) {
+	global hotkeys, colorHotkeys, ui
+	colorKeys := ""
+	for hk, val in colorHotkeys
+		colorKeys .= (colorKeys = "" ? FormatHotkeyLabel(hk) : ", " FormatHotkeyLabel(hk))
+
+	txt := "Hotkeys:"
+	if (hotkeys.help)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.help) ": Show this help"
+	txt .= "`n" FormatHotkeyLabel(hotkeys.toggle) ": Toggle drawing mode"
+	if (hotkeys.exit)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.exit) ": Exit app"
+	if (hotkeys.clear)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.clear) ": Clear drawing"
+	if (hotkeys.undo)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.undo) ": Undo last shape"
+	if (hotkeys.redo)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.redo) ": Redo last shape`n"
+	if (hotkeys.incLine)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.incLine) ": Increase line width"
+	if (hotkeys.decLine)
+		txt .= "`n" FormatHotkeyLabel(hotkeys.decLine) ": Decrease line width"
+
+	txt .= "`nWheelUp/WheelDown: Line width +/-"
+	txt .= "`nMouse Back (XButton1): Undo last shape"
+	txt .= "`nMouse Forward (XButton2): Redo last shape`n"
+
+	txt .= "`nRight click: Open settings panel"
+	txt .= "`nShift: Line"
+	txt .= "`nCtrl: Rect"
+	txt .= "`nAlt: Ellipse"
+	txt .= "`nCtrl+Alt: Circle"
+	txt .= "`nCtrl+Shift: Arrow`n"
+	if (colorKeys != "")
+		txt .= "`nColor hotkeys: " colorKeys
+
+	_TopMostMsgBox(txt, "Hotkeys Help")
+}
+
 About(*) {
-	msg := "
+	global ui
+	txt := "
 	(
-		AkcanSoft On Screen Drawing Tool v1.1.0`n
 		©2026 Mesut Akcan 
 		makcan@gmail.com
 		github.com/akcansoft
 		mesutakcan.blogspot.com
 		youtube.com/mesutakcan
 	)"
-	MsgBox(msg, "About", "Iconi Owner") ; ui.overlay.Hwnd)
+	_TopMostMsgBox(txt, "About")
+}
+
+; Helper to show a MsgBox that stays on top (modal when drawing, AlwaysOnTop otherwise)
+_TopMostMsgBox(text, title, options := "Iconi") {
+	global ui
+	text := App.Name " v" App.Version "`n`n" text
+	if (IsObject(ui.overlay) && ui.overlay.Hwnd)
+		options .= " Owner" ui.overlay.Hwnd
+	else
+		options .= " 0x40000"
+	return MsgBox(text, title, options)
 }
