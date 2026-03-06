@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.2.0
+;@Ahk2Exe-SetFileVersion 1.2.1
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -39,7 +39,7 @@ CoordMode("Mouse", "Screen")
 
 App := {
 	Name: "akcanSoft On Screen Drawing Tool",
-	Version: "1.2.0",
+	Version: "1.2.1",
 }
 
 ; Load Settings from INI
@@ -908,9 +908,11 @@ ExitAppFromSettings(*) {
 ClearDrawing(*) {
 	global ui, gdi
 	global allShapes, redoStack, needsUpdate
-	if (!drawingMode)
+	if (!drawingMode || !allShapes.Length)
 		return
-	allShapes := []
+
+	savedShapes := allShapes
+	allShapes := [{ type: "clear", shapes: savedShapes }]
 	redoStack := []
 
 	; Clear the baked graphics properly before redrawing the background
@@ -929,7 +931,12 @@ DeleteLastShape(*) {
 	global allShapes, redoStack, needsUpdate
 	if (!drawingMode || !allShapes.Length)
 		return
-	redoStack.Push(allShapes.Pop())
+
+	item := allShapes.Pop()
+	if (item.HasProp("type") && item.type == "clear") {
+		allShapes := item.shapes
+	}
+	redoStack.Push(item)
 
 	; Clear the baked graphics properly before redrawing everything, otherwise removed shapes leave artifacts
 	if (gdi.G_Baked)
@@ -947,9 +954,15 @@ RedoLastShape(*) {
 	global allShapes, redoStack, needsUpdate
 	if (!drawingMode || !redoStack.Length)
 		return
-	shape := redoStack.Pop()
-	allShapes.Push(shape)
-	if (!_AppendShapeToBaked(shape)) {
+
+	item := redoStack.Pop()
+	if (item.HasProp("type") && item.type == "clear") {
+		allShapes := [item]
+	} else {
+		allShapes.Push(item)
+	}
+
+	if (!_AppendShapeToBaked(item)) {
 		if (gdi.G_Baked)
 			DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", 0)
 		RefreshBakedBuffer()
@@ -1019,7 +1032,7 @@ RefreshBakedBuffer() {
 
 _AppendShapeToBaked(shape) {
 	global gdi, activeMonitor
-	if (!IsObject(shape) || !shape.HasProp("type"))
+	if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear")
 		return false
 	if (!gdi.G_Baked || !gdi.hBitmapBackground || activeMonitor.width <= 0 || activeMonitor.height <= 0)
 		return false
@@ -1085,7 +1098,7 @@ DrawShapesToGraphics(G, shapesArray) {
 	lastBrushColor := -1, pBrush := 0
 
 	for index, shape in shapesArray {
-		if (!IsObject(shape) || !shape.HasProp("type"))
+		if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear")
 			continue
 
 		if (shape.color != lastPenColor || shape.width != lastPenWidth) {
