@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.2.1
+;@Ahk2Exe-SetFileVersion 1.2.2
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -12,7 +12,7 @@ On Screen Drawing Tool
 A lightweight on-screen drawing tool for annotating the screen with
 lines, rectangles, ellipses, circles, and freehand drawings.
 =========================
-Date: 06/03/2026
+Date: 07/03/2026
 Author: Mesut Akcan
 =========================
 github.com/akcansoft
@@ -39,15 +39,57 @@ CoordMode("Mouse", "Screen")
 
 App := {
 	Name: "akcanSoft On Screen Drawing Tool",
-	Version: "1.2.1",
+	Version: "1.2.2",
+}
+
+class DrawingColors {
+	static Defaults := [{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y",
+		val: 0xFFFF00 }, { hk: "m", val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v",
+			val: 0x7F00FF }, { hk: "s", val: 0x8B4513 }, { hk: "w", val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k",
+				val: 0x000000 }
+	]
+	static List := []
+	static Hotkeys := Map()
+
+	static Load(iniFile) {
+		this.List := []
+		this.Hotkeys := Map()
+
+		iniReadResult := IniRead(iniFile, "Colors", , "")
+
+		if (iniReadResult != "") {
+			loop parse, iniReadResult, "`n", "`r" {
+				if (A_LoopField = "")
+					continue
+				parts := StrSplit(A_LoopField, "=")
+				if (parts.Length = 2) {
+					hk := Trim(parts[1])
+					try {
+						cVal := Integer(Trim(parts[2]))
+						this.List.Push({ hk: hk, val: cVal })
+						this.Hotkeys[hk] := cVal
+					}
+				}
+			}
+		}
+
+		if (this.List.Length = 0) {
+			this.List := this.Defaults
+			for item in this.Defaults
+				this.Hotkeys[item.hk] := item.val
+		}
+	}
+
+	static GetDefaultIniSection() {
+		str := "[Colors]`n"
+		for item in this.Defaults
+			str .= item.hk "=" Format("0x{:06X}", item.val) "`n"
+		return str
+	}
 }
 
 ; Load Settings from INI
 global iniFile := A_ScriptDir "\settings.ini"
-global defaultColors := [{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y",
-	val: 0xFFFF00 }, { hk: "m", val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v", val: 0x7F00FF }, { hk: "s",
-		val: 0x8B4513 }, { hk: "w", val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k", val: 0x000000 }
-]
 
 global cfg := {
 	line: {
@@ -76,30 +118,9 @@ global hotkeys := {
 	help: IniRead(iniFile, "Hotkeys", "HotkeysHelp", "F1")
 }
 
-global colorList := []
-global colorHotkeys := Map()
+DrawingColors.Load(iniFile)
 
-iniReadResult := IniRead(iniFile, "Colors", , "")
-
-if (iniReadResult = "") {
-	colorList := defaultColors
-	for item in colorList
-		colorHotkeys[item.hk] := item.val
-} else {
-	loop parse, iniReadResult, "`n", "`r" {
-		if (A_LoopField = "")
-			continue
-		parts := StrSplit(A_LoopField, "=")
-		if (parts.Length = 2) {
-			hk := Trim(parts[1])
-			cVal := Integer(Trim(parts[2]))
-			colorList.Push({ hk: hk, val: cVal })
-			colorHotkeys[hk] := cVal
-		}
-	}
-}
-
-global drawColor := colorList.Length ? ARGB(colorList[1].val, cfg.drawAlpha) : ARGB(0xFF0000, cfg.drawAlpha)
+global drawColor := ARGB(DrawingColors.List[1].val, cfg.drawAlpha)
 global trayToggleLabel := ""
 
 global drawingMode := false
@@ -171,23 +192,24 @@ Hotkey("Esc", CloseSettingsGui)
 HotIf (*) => drawingMode && IsMouseOnActiveMonitor()
 if hotkeys.clear
 	Hotkey(hotkeys.clear, ClearDrawing)
-if hotkeys.undo
-	Hotkey(hotkeys.undo, DeleteLastShape)
 if hotkeys.redo
 	Hotkey(hotkeys.redo, RedoLastShape)
 if hotkeys.incLine
 	Hotkey(hotkeys.incLine, AdjustLineWidthUp)
 if hotkeys.decLine
 	Hotkey(hotkeys.decLine, AdjustLineWidthDown)
-
-Hotkey("WheelUp", AdjustLineWidthUp)
-Hotkey("WheelDown", AdjustLineWidthDown)
 Hotkey("XButton1", DeleteLastShape)
 Hotkey("XButton2", RedoLastShape)
 
-for hk, val in colorHotkeys
+for hk, val in DrawingColors.Hotkeys
 	Hotkey(hk, SetDrawColor.Bind(val))
 
+; Mouse wheel settings
+HotIf (*) => drawingMode && IsMouseOnActiveMonitor() && !WinActive("ahk_id " (ui.settings ? ui.settings.Hwnd : 0))
+if hotkeys.undo
+	Hotkey(hotkeys.undo, DeleteLastShape)
+Hotkey("WheelUp", AdjustLineWidthUp)
+Hotkey("WheelDown", AdjustLineWidthDown)
 HotIf
 
 ;=============================================
@@ -320,19 +342,7 @@ ResetDefaultsFromTray(*) {
 			. "IncreaseLineWidth=^NumpadAdd`n"
 			. "DecreaseLineWidth=^NumpadSub`n"
 			. "HotkeysHelp=F1`n`n"
-			. "[Colors]`n"
-			. "r=0xFF0000`n"
-			. "g=0x00FF00`n"
-			. "b=0x0000FF`n"
-			. "y=0xFFFF00`n"
-			. "m=0xFF00FF`n"
-			. "c=0x00FFFF`n"
-			. "o=0xFFA500`n"
-			. "v=0x7F00FF`n"
-			. "s=0x8B4513`n"
-			. "w=0xFFFFFF`n"
-			. "n=0x808080`n"
-			. "k=0x000000`n"
+			. DrawingColors.GetDefaultIniSection()
 
 		f := FileOpen(iniFile, "w", "UTF-8")
 		if (!f)
@@ -582,9 +592,9 @@ DisableDrawingCursor() {
 }
 
 ReadIniBool(file, section, key, default := false) {
-	raw := Trim(IniRead(file, section, key, default ? "1" : "0"))
-	if (raw = "")
-		return default
+	raw := Trim(IniRead(file, section, key, ""))
+	if (raw == "")
+		return !!default
 	norm := StrLower(raw)
 	if (norm = "1" || norm = "true" || norm = "yes" || norm = "on")
 		return true
@@ -592,7 +602,7 @@ ReadIniBool(file, section, key, default := false) {
 		return false
 	if RegExMatch(norm, "^-?\d+$")
 		return Integer(norm) != 0
-	return default
+	return !!default
 }
 
 ; WM Message Handlers
@@ -610,7 +620,7 @@ WM_PAINT_Handler(wParam, lParam, msg, hwnd) {
 		activeMonitor.height <= 0)
 		return
 
-	ps := Buffer(A_PtrSize == 8 ? 72 : 64) ; paint Struct Size
+	static ps := Buffer(A_PtrSize == 8 ? 72 : 64) ; paint Struct Size
 	hDC := DllCall("BeginPaint", "Ptr", hwnd, "Ptr", ps.Ptr, "Ptr")
 	if (!hDC)
 		return 0
@@ -745,7 +755,6 @@ WM_MOUSEMOVE(wParam, lParam, msg, hwnd) {
 			currentShape.radius := Max(Abs(x - startX), Abs(y - startY))
 		needsUpdate := true
 	}
-
 }
 
 WM_RBUTTONDOWN(wParam, lParam, msg, hwnd) {
@@ -775,7 +784,7 @@ WM_RBUTTONDOWN(wParam, lParam, msg, hwnd) {
 }
 
 _CreateSettingsGui() {
-	global ui, activeMonitor, colorList, cfg
+	global ui, activeMonitor, cfg
 	ui.settings := Gui("+AlwaysOnTop +ToolWindow -Caption Border")
 	ui.settings.Title := "Drawing Settings"
 	ui.settings.OnEvent("Close", OnSettingsGuiClose)
@@ -788,7 +797,7 @@ _CreateSettingsGui() {
 
 	ui.colorMarks.Clear()
 	curY := margin
-	for i, item in colorList {
+	for i, item in DrawingColors.List {
 		val := item.val
 		hex := Format("{:06X}", val)
 		col := Mod(i - 1, colorColumnCount)
@@ -804,12 +813,12 @@ _CreateSettingsGui() {
 		chk := ui.settings.AddText("xp yp wp hp +Center +0x200 c" markColor " BackgroundTrans", "")
 		_ResetUISettingsFont()
 
-		btn.OnEvent("Click", ColorSelect.Bind(val, ui.settings))
-		chk.OnEvent("Click", ColorSelect.Bind(val, ui.settings))
+		btn.OnEvent("Click", ColorSelect.Bind(val))
+		chk.OnEvent("Click", ColorSelect.Bind(val))
 		ui.colorMarks[val] := chk
 	}
 
-	rowCount := Ceil(colorList.Length / colorColumnCount)
+	rowCount := Ceil(DrawingColors.List.Length / colorColumnCount)
 	gridBottom := curY + rowCount * (btnSize + gap)
 
 	; Line width control
@@ -874,7 +883,7 @@ _UpdateSettingsGui() {
 }
 
 ; Toolbar & Color Operations
-ColorSelect(colorVal, gui, *) {
+ColorSelect(colorVal, *) {
 	global drawColor
 	drawColor := ARGB(colorVal, cfg.drawAlpha)
 	_HideSettings()
@@ -921,7 +930,6 @@ ClearDrawing(*) {
 
 	RefreshBakedBuffer()
 	UpdateBuffer()
-	needsUpdate := true
 	if (IsObject(ui.overlay))
 		DllCall("InvalidateRect", "Ptr", ui.overlay.Hwnd, "Ptr", 0, "Int", 0)
 }
@@ -944,7 +952,6 @@ DeleteLastShape(*) {
 
 	RefreshBakedBuffer()
 	UpdateBuffer()
-	needsUpdate := true ; Crucial for the background rendering timer to synchronize
 	if (IsObject(ui.overlay))
 		DllCall("InvalidateRect", "Ptr", ui.overlay.Hwnd, "Ptr", 0, "Int", 0)
 }
@@ -968,7 +975,6 @@ RedoLastShape(*) {
 		RefreshBakedBuffer()
 	}
 	UpdateBuffer()
-	needsUpdate := true ; Crucial for the background rendering timer to synchronize
 	if (IsObject(ui.overlay))
 		DllCall("InvalidateRect", "Ptr", ui.overlay.Hwnd, "Ptr", 0, "Int", 0)
 }
@@ -1248,9 +1254,9 @@ InitDpiAwareness() {
 
 ; Show hotkeys help message box
 ShowHotkeysHelp(*) {
-	global hotkeys, colorHotkeys, ui
+	global hotkeys, ui
 	colorKeys := ""
-	for hk, val in colorHotkeys
+	for hk, val in DrawingColors.Hotkeys
 		colorKeys .= (colorKeys = "" ? FormatHotkeyLabel(hk) : ", " FormatHotkeyLabel(hk))
 
 	txt := "Hotkeys:"
@@ -1287,7 +1293,6 @@ ShowHotkeysHelp(*) {
 }
 
 About(*) {
-	global ui
 	txt := "
 	(
 		©2026 Mesut Akcan 
