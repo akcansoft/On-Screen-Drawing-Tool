@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.2.0-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.2-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/akcansoft/On-Screen-Drawing-Tool?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/akcansoft/On-Screen-Drawing-Tool?style=social)
@@ -173,6 +173,12 @@ The app reads `settings.ini` from the script/exe directory on startup. Missing k
 - `app_icon.ico` (Icon)
 
 ## Version History
+
+### v1.2.2 07/03/2026
+
+- **Enhanced Undo/Redo**: Added support for undoing "Clear Drawing" actions, allowing users to restore all shapes after a total clear.
+- **Interaction Fixes**: Resolved an issue where the mouse wheel interfered with numeric editboxes in the settings panel; wheel scrolling now correctly adjusts the focused control's value.
+- **Code Refactoring & Optimization**: Major internal architecture update, centralizing application state and logic (using a unified `App` object and `DrawingColors` class) for improved reliability and performance.
 
 ### v1.2.0 06/03/2026
 
