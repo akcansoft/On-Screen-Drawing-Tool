@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.3.0
+;@Ahk2Exe-SetFileVersion 1.3
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -12,7 +12,7 @@ On Screen Drawing Tool
 A lightweight on-screen drawing tool for annotating the screen with
 lines, rectangles, ellipses, circles, and freehand drawings.
 =========================
-Date: 07/03/2026
+Date: 08/03/2026
 Author: Mesut Akcan
 =========================
 github.com/akcansoft
@@ -38,7 +38,7 @@ CoordMode("Mouse", "Screen")
 
 App := {
 	Name: "akcanSoft On Screen Drawing Tool",
-	Version: "1.3.0",
+	Version: "1.3",
 	iniPath: A_ScriptDir "\settings.ini"
 }
 
