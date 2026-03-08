@@ -175,7 +175,7 @@ The app reads `settings.ini` from the script/exe directory on startup. Missing k
 
 ## Version History
 
-### v1.3.0 08/03/2026
+### v1.3 08/03/2026
 
 - **UI Enhancement**: Added hotkey hints to the color swatches in the right-click settings panel to improve discoverability.
 - **New Setting**: Introduced the `ShowColorHints` option in `settings.ini` to allow users to disable the new color hotkey hints if desired. This is enabled by default.
