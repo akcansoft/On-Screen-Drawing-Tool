@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.3
+;@Ahk2Exe-SetFileVersion 1.4
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -12,7 +12,7 @@ On Screen Drawing Tool
 A lightweight on-screen drawing tool for annotating the screen with
 lines, rectangles, ellipses, circles, and freehand drawings.
 =========================
-Date: 08/03/2026
+Date: 12/03/2026
 Author: Mesut Akcan
 =========================
 github.com/akcansoft
@@ -38,94 +38,24 @@ CoordMode("Mouse", "Screen")
 
 App := {
 	Name: "akcanSoft On Screen Drawing Tool",
-	Version: "1.3",
+	Version: "1.4",
 	iniPath: A_ScriptDir "\settings.ini"
 }
 
-class DrawingColors {
-	static Defaults := [{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y",
-		val: 0xFFFF00 }, { hk: "m", val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v",
-			val: 0x7F00FF }, { hk: "s", val: 0x8B4513 }, { hk: "w", val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k",
-				val: 0x000000 }
-	]
-	static List := []
-	static Load() {
-		this.List := []
-		iniReadResult := IniRead(App.iniPath, "Colors", , "")
+cfg := AppConfig()
 
-		if (iniReadResult != "") {
-			for line in StrSplit(iniReadResult, "`n", "`r") {
-				if (line = "")
-					continue
-				parts := StrSplit(line, "=")
-				if (parts.Length = 2) {
-					hk := Trim(parts[1])
-					try {
-						cVal := Integer(Trim(parts[2]))
-						this.List.Push({ hk: hk, val: cVal })
-					}
-				}
-			}
-		}
-
-		if (this.List.Length = 0) {
-			for item in this.Defaults
-				this.List.Push({ hk: item.hk, val: item.val })
-		}
-	}
-
-	static GetDefaultIniSection() {
-		str := "[Colors]`n"
-		for item in this.Defaults
-			str .= item.hk "=" Format("0x{:06X}", item.val) "`n"
-		return str
-	}
-}
-
-global cfg := {
-	line: {
-		minWidth: ReadIniInt("Settings", "MinLineWidth", 1),
-		maxWidth: ReadIniInt("Settings", "MaxLineWidth", 10),
-		width: ReadIniInt("Settings", "StartupLineWidth", 2)
-	},
-	drawAlpha: ReadIniInt("Settings", "DrawAlpha", 200),
-	frameIntervalMs: ReadIniInt("Settings", "FrameIntervalMs", 16),
-	minPointStep: ReadIniInt("Settings", "MinPointStep", 3),
-	clearOnExit: ReadIniBool("Settings", "ClearOnExit", false),
-	showColorHints: ReadIniBool("Settings", "ShowColorHints", true)
-}
-cfg.line.minWidth := Max(cfg.line.minWidth, 1)
-if (cfg.line.maxWidth < cfg.line.minWidth)
-	cfg.line.maxWidth := cfg.line.minWidth
-cfg.line.width := Max(Min(cfg.line.width, cfg.line.maxWidth), cfg.line.minWidth)
-cfg.drawAlpha := Max(Min(cfg.drawAlpha, 255), 0)
-cfg.frameIntervalMs := Max(cfg.frameIntervalMs, 1)
-cfg.minPointStep := Max(cfg.minPointStep, 1)
-
-global hotkeys := {
-	toggle: IniRead(App.iniPath, "Hotkeys", "ToggleDrawingMode", "^F9"),
-	exit: IniRead(App.iniPath, "Hotkeys", "ExitApp", "^+F12"),
-	clear: IniRead(App.iniPath, "Hotkeys", "ClearDrawing", "Esc"),
-	undo: IniRead(App.iniPath, "Hotkeys", "UndoDrawing", "Backspace"),
-	redo: IniRead(App.iniPath, "Hotkeys", "RedoDrawing", "+Backspace"),
-	incLine: IniRead(App.iniPath, "Hotkeys", "IncreaseLineWidth", "^NumpadAdd"),
-	decLine: IniRead(App.iniPath, "Hotkeys", "DecreaseLineWidth", "^NumpadSub"),
-	help: IniRead(App.iniPath, "Hotkeys", "HotkeysHelp", "F1")
-}
-
-DrawingColors.Load()
-
-global state := {
+state := {
 	drawingMode: false,
 	drawing: false,
 	needsUpdate: false,
 	cursorActive: false,
 	lastMonitorNum: 0,
-	monitor: { num: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }
+	monitor: { num: 0, left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 },
+	skipSaveSettings: false
 }
 
-global draw := {
-	color: ARGB(DrawingColors.List[1].val, cfg.drawAlpha),
+draw := {
+	color: ARGB(cfg.hasLastUsedColor ? cfg.lastUsedColorRGB : cfg.colors.List[1].val, cfg.drawAlpha),
 	startX: 0,
 	startY: 0,
 	currentShape: {},
@@ -133,7 +63,7 @@ global draw := {
 	redoStack: []
 }
 
-global ui := {
+ui := {
 	overlayGui: "",
 	settingsGui: "",
 	colorMarks: Map(),
@@ -142,126 +72,11 @@ global ui := {
 	trayLabel: ""
 }
 
-class GDIContext {
-	isDestroyed := false
-	token := 0
-	hBitmapBackground := 0
-	hdcMem := 0
-	hbmBuffer := 0
-	hbmDefault := 0
-	G_Mem := 0
-	G_Baked := 0
-	hdcBaked := 0
-	hbmBaked := 0
-	hbmBakedDefault := 0
-
-	; Startup GDI+
-	Init() {
-		try {
-			this.isDestroyed := false
-			this.token := Gdip_Startup()
-		} catch Error as e {
-			MsgBox("GDI+ Error: " e.Message, "Error", 48)
-			ExitApp
-		}
-	}
-
-	; Create resources for a specific monitor
-	CreateBuffer(monNum, width, height) {
-		this.DestroyBuffer()
-
-		this.hBitmapBackground := Gdip_BitmapFromScreen(monNum)
-		if (this.hBitmapBackground <= 0) {
-			this.hBitmapBackground := 0
-			throw Error("Failed to capture screen.")
-		}
-
-		hdcScreen := DllCall("GetDC", "Ptr", 0, "Ptr")
-		this.hdcMem := DllCall("CreateCompatibleDC", "Ptr", hdcScreen, "Ptr")
-		this.hbmBuffer := DllCall("CreateCompatibleBitmap", "Ptr", hdcScreen, "Int", width, "Int", height, "Ptr")
-		this.hdcBaked := DllCall("CreateCompatibleDC", "Ptr", hdcScreen, "Ptr")
-		this.hbmBaked := DllCall("CreateCompatibleBitmap", "Ptr", hdcScreen, "Int", width, "Int", height, "Ptr")
-		DllCall("ReleaseDC", "Ptr", 0, "Ptr", hdcScreen)
-
-		if (!this.hdcMem || !this.hbmBuffer || !this.hdcBaked || !this.hbmBaked) {
-			this.DestroyBuffer()
-			throw Error("Failed to create memory DC or bitmap.")
-		}
-
-		this.hbmDefault := DllCall("SelectObject", "Ptr", this.hdcMem, "Ptr", this.hbmBuffer, "Ptr")
-		this.hbmBakedDefault := DllCall("SelectObject", "Ptr", this.hdcBaked, "Ptr", this.hbmBaked, "Ptr")
-
-		this.G_Mem := Gdip_GraphicsFromHDC(this.hdcMem)
-		this.G_Baked := Gdip_GraphicsFromHDC(this.hdcBaked)
-
-		if (!this.G_Mem || !this.G_Baked) {
-			this.DestroyBuffer()
-			throw Error("Failed to get GDI+ graphics context.")
-		}
-
-		Gdip_SetSmoothingMode(this.G_Mem, 4)
-		Gdip_SetSmoothingMode(this.G_Baked, 4)
-	}
-
-	; Cleanup only the drawing buffers (when switching monitors or exiting drawing mode)
-	DestroyBuffer() {
-		if (this.G_Mem) {
-			Gdip_DeleteGraphics(this.G_Mem)
-			this.G_Mem := 0
-		}
-		if (this.hdcMem) {
-			if (this.hbmBuffer) {
-				if (this.hbmDefault && this.hbmDefault != -1)
-					DllCall("SelectObject", "Ptr", this.hdcMem, "Ptr", this.hbmDefault)
-				DllCall("DeleteObject", "Ptr", this.hbmBuffer)
-				this.hbmBuffer := 0
-			}
-			this.hbmDefault := 0
-			DllCall("DeleteDC", "Ptr", this.hdcMem)
-			this.hdcMem := 0
-		}
-		if (this.G_Baked) {
-			Gdip_DeleteGraphics(this.G_Baked)
-			this.G_Baked := 0
-		}
-		if (this.hdcBaked) {
-			if (this.hbmBaked) {
-				if (this.hbmBakedDefault && this.hbmBakedDefault != -1)
-					DllCall("SelectObject", "Ptr", this.hdcBaked, "Ptr", this.hbmBakedDefault)
-				DllCall("DeleteObject", "Ptr", this.hbmBaked)
-				this.hbmBaked := 0
-			}
-			this.hbmBakedDefault := 0
-			DllCall("DeleteDC", "Ptr", this.hdcBaked)
-			this.hdcBaked := 0
-		}
-		if (this.hBitmapBackground) {
-			Gdip_DisposeImage(this.hBitmapBackground)
-			this.hBitmapBackground := 0
-		}
-	}
-
-	; Full cleanup including GDI+ shutdown
-	Destroy() {
-		if (this.isDestroyed)
-			return
-
-		this.isDestroyed := true
-		this.DestroyBuffer()
-		if (this.token) {
-			Gdip_Shutdown(this.token)
-			this.token := 0
-		}
-	}
-
-	__Delete() => this.Destroy()
-}
-
-global gdi := GDIContext()
+gdi := GDIContext()
 
 gdi.Init() ; Initialize GDI+
 
-OnExit((*) => ExitDrawingMode(true))
+OnExit(OnAppExit)
 
 ; Event Listeners
 OnMessage(0x201, WM_LBUTTONDOWN) ; Left button down
@@ -274,37 +89,37 @@ OnMessage(0x14, WM_ERASEBKGND_Handler)
 InitTrayMenu()
 
 ; Hotkeys
-if hotkeys.toggle
-	Hotkey(hotkeys.toggle, ToggleDrawingMode)
-if hotkeys.exit
-	Hotkey(hotkeys.exit, (*) => ExitApp())
-if hotkeys.help
-	Hotkey(hotkeys.help, ShowHotkeysHelp)
+if cfg.hotkeys.toggle
+	Hotkey(cfg.hotkeys.toggle, ToggleDrawingMode)
+if cfg.hotkeys.exit
+	Hotkey(cfg.hotkeys.exit, (*) => ExitApp())
+if cfg.hotkeys.help
+	Hotkey(cfg.hotkeys.help, ShowHotkeysHelp)
 
 HotIf (*) => WinActive("ahk_id " (ui.settingsGui ? ui.settingsGui.Hwnd : 0))
 Hotkey("Esc", CloseSettingsGui)
 
 HotIf (*) => state.drawingMode && IsMouseOnActiveMonitor() && !WinActive("ahk_class #32770") && !WinActive("ahk_id " (
 	ui.settingsGui ? ui.settingsGui.Hwnd : 0))
-if hotkeys.clear
-	Hotkey(hotkeys.clear, ClearDrawing)
-if hotkeys.redo
-	Hotkey(hotkeys.redo, RedoLastShape)
-if hotkeys.incLine
-	Hotkey(hotkeys.incLine, AdjustLineWidthUp)
-if hotkeys.decLine
-	Hotkey(hotkeys.decLine, AdjustLineWidthDown)
+if cfg.hotkeys.clear
+	Hotkey(cfg.hotkeys.clear, ClearDrawing)
+if cfg.hotkeys.redo
+	Hotkey(cfg.hotkeys.redo, RedoLastShape)
+if cfg.hotkeys.incLine
+	Hotkey(cfg.hotkeys.incLine, AdjustLineWidthUp)
+if cfg.hotkeys.decLine
+	Hotkey(cfg.hotkeys.decLine, AdjustLineWidthDown)
 Hotkey("XButton1", DeleteLastShape)
 Hotkey("XButton2", RedoLastShape)
 
-for item in DrawingColors.List
+for item in cfg.colors.List
 	Hotkey(item.hk, SetDrawColor.Bind(item.val))
 
 ; Mouse wheel settings
 HotIf (*) => state.drawingMode && IsMouseOnActiveMonitor() && !WinActive("ahk_id " (ui.settingsGui ? ui.settingsGui.Hwnd :
 	0)) && !WinActive("ahk_class #32770")
-if hotkeys.undo
-	Hotkey(hotkeys.undo, DeleteLastShape)
+if cfg.hotkeys.undo
+	Hotkey(cfg.hotkeys.undo, DeleteLastShape)
 Hotkey("WheelUp", AdjustLineWidthUp)
 Hotkey("WheelDown", AdjustLineWidthDown)
 HotIf
@@ -365,25 +180,25 @@ StartDrawingFromTray(*) {
 }
 
 InitTrayMenu() {
-	hkSuffix := "`t" FormatHotkeyLabel(hotkeys.toggle)
+	hkSuffix := "`t" FormatHotkeyLabel(cfg.hotkeys.toggle)
 	ui.trayLabel := (state.drawingMode ? "Stop Drawing" : "Start Drawing") . hkSuffix
 
 	A_TrayMenu.Delete()
 	A_TrayMenu.Add("About", (*) => About())
-	A_TrayMenu.Add("Hotkeys Help`t" . FormatHotkeyLabel(hotkeys.help), ShowHotkeysHelp)
+	A_TrayMenu.Add("Hotkeys Help`t" . FormatHotkeyLabel(cfg.hotkeys.help), ShowHotkeysHelp)
 	A_TrayMenu.Add("GitHub repo", (*) => Run("https://github.com/akcansoft/On-Screen-Drawing-Tool"))
 	A_TrayMenu.Add()
 	A_TrayMenu.Add("Open settings.ini", OpenSettingsIniFromTray)
 	A_TrayMenu.Add("Reset to Defaults", ResetDefaultsFromTray)
-	A_TrayMenu.Add("Reload Script", (*) => Reload())
 	A_TrayMenu.Add()
+	A_TrayMenu.Add("Restart Application", (*) => Reload())
 	A_TrayMenu.Add(ui.trayLabel, StartDrawingFromTray)
-	A_TrayMenu.Add("Exit`t" . FormatHotkeyLabel(hotkeys.exit), (*) => ExitApp())
+	A_TrayMenu.Add("Exit`t" . FormatHotkeyLabel(cfg.hotkeys.exit), (*) => ExitApp())
 	A_TrayMenu.Default := ui.trayLabel
 }
 
 UpdateTrayToggleMenu() {
-	hkSuffix := "`t" FormatHotkeyLabel(hotkeys.toggle)
+	hkSuffix := "`t" FormatHotkeyLabel(cfg.hotkeys.toggle)
 	newLabel := (state.drawingMode ? "Stop Drawing" : "Start Drawing") . hkSuffix
 
 	if (ui.trayLabel = newLabel)
@@ -412,39 +227,21 @@ FormatHotkeyLabel(hk) {
 	if (hk = "")
 		return ""
 
-	label := StrReplace(hk, "+", "{SHIFT}")
+	label := StrReplace(hk, "+", "Shift+")
 	label := StrReplace(label, "^", "Ctrl+")
 	label := StrReplace(label, "!", "Alt+")
 	label := StrReplace(label, "#", "Win+")
-	label := StrReplace(label, "{SHIFT}", "Shift+")
 	return label
 }
 
 ; Reset settings.ini to defaults from tray menu
 ResetDefaultsFromTray(*) {
+	global state
 	if (MsgBox("Reset settings.ini to defaults and reload the script?", "Reset to Defaults", "YesNo Icon!") != "Yes")
 		return
 
 	try {
-		defaultIni := "[Settings]`n"
-			. "StartupLineWidth=2`n"
-			. "MinLineWidth=1`n"
-			. "MaxLineWidth=10`n"
-			. "DrawAlpha=200`n"
-			. "FrameIntervalMs=16`n"
-			. "MinPointStep=3`n"
-			. "ClearOnExit=false`n"
-			. "ShowColorHints=true`n`n"
-			. "[Hotkeys]`n"
-			. "ToggleDrawingMode=^F9`n"
-			. "ExitApp=^+F12`n"
-			. "ClearDrawing=Esc`n"
-			. "UndoDrawing=Backspace`n"
-			. "RedoDrawing=+Backspace`n"
-			. "IncreaseLineWidth=^NumpadAdd`n"
-			. "DecreaseLineWidth=^NumpadSub`n"
-			. "HotkeysHelp=F1`n`n"
-			. DrawingColors.GetDefaultIniSection()
+		defaultIni := AppConfig.GetDefaultIniString()
 
 		f := FileOpen(App.iniPath, "w", "UTF-8")
 		if (!f)
@@ -456,6 +253,7 @@ ResetDefaultsFromTray(*) {
 		return
 	}
 
+	state.skipSaveSettings := true
 	Reload()
 }
 
@@ -613,24 +411,23 @@ DisableDrawingCursor() {
 	return true
 }
 
-ReadIniInt(section, key, default := 0) {
-	try return Integer(IniRead(App.iniPath, section, key, default))
-	catch
-		return Integer(default)
+; Save last used drawing settings to INI on exit
+SaveLastUsedSettings() {
+	global cfg, draw, state
+	if (state.skipSaveSettings || !cfg.saveLastUsed) ;
+		return
+
+	try {
+		IniWrite(cfg.line.width, App.iniPath, "LastUsed", "LineWidth")
+		IniWrite(cfg.drawAlpha, App.iniPath, "LastUsed", "DrawAlpha")
+		IniWrite(Format("0x{:06X}", draw.color & 0xFFFFFF), App.iniPath, "LastUsed", "Color")
+	}
 }
 
-ReadIniBool(section, key, default := false) {
-	raw := Trim(IniRead(App.iniPath, section, key, ""))
-	if (raw == "")
-		return !!default
-	norm := StrLower(raw)
-	if (norm = "1" || norm = "true" || norm = "yes" || norm = "on")
-		return true
-	if (norm = "0" || norm = "false" || norm = "no" || norm = "off")
-		return false
-	if RegExMatch(norm, "^-?\d+$")
-		return Integer(norm) != 0
-	return !!default
+; On app exit
+OnAppExit(ExitReason, ExitCode) {
+	SaveLastUsedSettings()
+	ExitDrawingMode(true)
 }
 
 ; WM Message Handlers
@@ -710,7 +507,7 @@ WM_LBUTTONDOWN(wParam, lParam, msg, hwnd) {
 	}
 	if (currentTool = "free") {
 		draw.currentShape.points := [[x, y]]
-		draw.currentShape.pointsStr := x "," y
+		draw.currentShape.pointsStr := x "," y  ; Incremental string starts here
 	}
 
 	state.needsUpdate := false
@@ -744,6 +541,9 @@ WM_LBUTTONUP(wParam, lParam, msg, hwnd) {
 
 	if (valid) {
 		draw.redoStack := []
+		; Enforce history size limit — silently drop the oldest entry if exceeded
+		while (draw.history.Length >= cfg.maxHistorySize)
+			draw.history.RemoveAt(1)
 		draw.history.Push(shapeToFinalize)
 		if (!_AppendShapeToBaked(shapeToFinalize))
 			RefreshBakedBuffer()
@@ -770,7 +570,7 @@ WM_MOUSEMOVE(wParam, lParam, msg, hwnd) {
 		lastPoint := draw.currentShape.points[draw.currentShape.points.Length]
 		if (Abs(x - lastPoint[1]) >= cfg.minPointStep || Abs(y - lastPoint[2]) >= cfg.minPointStep) {
 			draw.currentShape.points.Push([x, y])
-			draw.currentShape.pointsStr .= "|" x "," y
+			draw.currentShape.pointsStr .= "|" x "," y  ; O(1) incremental append
 			state.needsUpdate := true
 		}
 	} else {
@@ -821,7 +621,7 @@ _CreateSettingsGui() {
 
 	ui.colorMarks.Clear()
 	curY := margin
-	for i, item in DrawingColors.List {
+	for i, item in cfg.colors.List {
 		val := item.val
 		hkLetter := StrUpper(item.hk)
 		hex := Format("{:06X}", val)
@@ -846,14 +646,13 @@ _CreateSettingsGui() {
 				hkLetter)
 		}
 
-		_ResetUISettingsFont()
-
 		btn.OnEvent("Click", ColorSelect.Bind(val))
 		chk.OnEvent("Click", ColorSelect.Bind(val))
 		ui.colorMarks[val] := chk
 	}
+	_ResetUISettingsFont()
 
-	rowCount := Ceil(DrawingColors.List.Length / colorColumnCount)
+	rowCount := Ceil(cfg.colors.List.Length / colorColumnCount)
 	gridBottom := curY + rowCount * (btnSize + gap)
 
 	; Line width control
@@ -1019,11 +818,7 @@ AdjustLineWidth(delta) {
 		return
 	cfg.line.width := Max(Min(cfg.line.width + delta, cfg.line.maxWidth), cfg.line.minWidth)
 	ToolTip("Width: " cfg.line.width)
-	SetTimer(HideToolTip, -1000)
-}
-
-HideToolTip() {
-	ToolTip()
+	SetTimer(() => ToolTip(), -1000)
 }
 
 SetDrawColor(colorRGB, *) {
@@ -1076,8 +871,12 @@ _AppendShapeToBaked(shape) {
 		return false
 	if (!gdi.G_Baked || !gdi.hBitmapBackground || state.monitor.width <= 0 || state.monitor.height <= 0)
 		return false
-	DrawShapesToGraphics(gdi.G_Baked, [shape])
-	return true
+	try {
+		DrawShapesToGraphics(gdi.G_Baked, [shape])
+		return true
+	} catch {
+		return false
+	}
 }
 
 IsMouseOnActiveMonitor() {
@@ -1085,7 +884,8 @@ IsMouseOnActiveMonitor() {
 	if (!IsObject(state.monitor) || state.monitor.width <= 0 || state.monitor.height <= 0)
 		return false
 	MouseGetPos(&mX, &mY)
-	return (mX >= state.monitor.left && mX < state.monitor.right && mY >= state.monitor.top && mY < state.monitor.bottom)
+	return (mX >= state.monitor.left && mX < state.monitor.right && mY >= state.monitor.top && mY < state.monitor.bottom
+	)
 }
 
 GetMouseMonitorInfo() {
@@ -1122,19 +922,13 @@ SignedInt16(v) {
 	return (v & 0x8000) ? (v - 0x10000) : v
 }
 
-; Shape Drawing
-BuildPointsStr(points) {
-	if (!IsObject(points) || points.Length < 2)
-		return ""
-	str := points[1][1] "," points[1][2]
-	loop points.Length - 1
-		str .= "|" points[A_Index + 1][1] "," points[A_Index + 1][2]
-	return str
-}
-
 DrawShapesToGraphics(G, shapesArray) {
 	lastPenColor := -1, lastPenWidth := -1, pPen := 0
+	lastFreePenColor := -1, lastFreePenWidth := -1, pFreePen := 0  ; Round-cap pen for freehand
 	lastBrushColor := -1, pBrush := 0
+
+	static LineCapRound := 1  ; GDI+ LineCap enumeration
+	static LineJoinRound := 2  ; GDI+ LineJoin enumeration (distinct from LineCap!)
 
 	for index, shape in shapesArray {
 		if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear")
@@ -1150,21 +944,33 @@ DrawShapesToGraphics(G, shapesArray) {
 			lastPenWidth := shape.width
 		}
 
+		; Freehand uses a separate round-cap pen for smooth stroke ends and joins
+		if (shape.type = "free" && (shape.color != lastFreePenColor || shape.width != lastFreePenWidth)) {
+			if (pFreePen)
+				Gdip_DeletePen(pFreePen)
+			pFreePen := Gdip_CreatePen(shape.color, shape.width)
+			if (pFreePen) {
+				DllCall("gdiplus\GdipSetPenStartCap", "UPtr", pFreePen, "Int", LineCapRound)
+				DllCall("gdiplus\GdipSetPenEndCap", "UPtr", pFreePen, "Int", LineCapRound)
+				DllCall("gdiplus\GdipSetPenLineJoin", "UPtr", pFreePen, "Int", LineJoinRound)
+			}
+			lastFreePenColor := shape.color
+			lastFreePenWidth := shape.width
+		}
+
 		if (shape.type = "arrow" && shape.color != lastBrushColor) {
 			if (pBrush)
 				Gdip_DeleteBrush(pBrush)
 			pBrush := Gdip_BrushCreateSolid(shape.color)
-			lastBrushColor := shape.color
+			if (pBrush)  ; Only update cache key if brush was created successfully
+				lastBrushColor := shape.color
 		}
 
 		try {
 			switch shape.type {
 				case "free":
-					if (shape.HasProp("points") && shape.points.Length >= 2) {
-						if (!shape.HasProp("pointsStr"))
-							shape.pointsStr := BuildPointsStr(shape.points)
-						Gdip_DrawLines(G, pPen, shape.pointsStr)
-					}
+					if (shape.HasProp("points") && shape.points.Length >= 2 && pFreePen)
+						Gdip_DrawLines(G, pFreePen, shape.pointsStr)
 				case "rect":
 					Gdip_DrawRectangle(G, pPen,
 						Min(shape.startX, shape.endX),
@@ -1184,9 +990,8 @@ DrawShapesToGraphics(G, shapesArray) {
 						shape.startX - shape.radius, shape.startY - shape.radius,
 						shape.radius * 2, shape.radius * 2)
 				case "arrow":
-					if (pBrush) {
+					if (pBrush)
 						DrawArrowGdip(G, pPen, pBrush, shape.startX, shape.startY, shape.endX, shape.endY, shape.width)
-					}
 			}
 		} catch Error as e {
 			OutputDebug("GDI+ Drawing Error [type=" shape.type ", idx=" index "]: " e.Message "`n")
@@ -1195,6 +1000,8 @@ DrawShapesToGraphics(G, shapesArray) {
 
 	if (pPen)
 		Gdip_DeletePen(pPen)
+	if (pFreePen)
+		Gdip_DeletePen(pFreePen)
 	if (pBrush)
 		Gdip_DeleteBrush(pBrush)
 }
@@ -1276,27 +1083,27 @@ InitDpiAwareness() {
 
 ; Show hotkeys help message box
 ShowHotkeysHelp(*) {
-	global hotkeys
+	global cfg
 	colorKeys := ""
-	for item in DrawingColors.List
+	for item in cfg.colors.List
 		colorKeys .= (colorKeys = "" ? FormatHotkeyLabel(item.hk) : ", " FormatHotkeyLabel(item.hk))
 
 	txt := "Hotkeys:"
-	if (hotkeys.help)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.help) ": Show this help"
-	txt .= "`n" FormatHotkeyLabel(hotkeys.toggle) ": Toggle drawing mode"
-	if (hotkeys.exit)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.exit) ": Exit app"
-	if (hotkeys.clear)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.clear) ": Clear drawing"
-	if (hotkeys.undo)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.undo) ": Undo last shape"
-	if (hotkeys.redo)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.redo) ": Redo last shape`n"
-	if (hotkeys.incLine)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.incLine) ": Increase line width"
-	if (hotkeys.decLine)
-		txt .= "`n" FormatHotkeyLabel(hotkeys.decLine) ": Decrease line width"
+	if (cfg.hotkeys.help)
+		txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.help) ": Show this help"
+	txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.toggle) ": Toggle drawing mode"
+	if (cfg.hotkeys.exit)
+		txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.exit) ": Exit app"
+	if (cfg.hotkeys.clear)
+		txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.clear) ": Clear drawing"
+	if (cfg.hotkeys.undo)
+		txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.undo) ": Undo last shape"
+	if (cfg.hotkeys.redo)
+		txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.redo) ": Redo last shape`n"
+	if (cfg.hotkeys.incLine)
+		txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.incLine) ": Increase line width"
+	if (cfg.hotkeys.decLine)
+		txt .= "`n" FormatHotkeyLabel(cfg.hotkeys.decLine) ": Decrease line width"
 
 	txt .= "`nWheelUp/WheelDown: Line width +/-"
 	txt .= "`nMouse Back (XButton1): Undo last shape"
@@ -1356,4 +1163,361 @@ _TopMostMsgBox(text, title, options := "Iconi") {
 		try WinSetEnabled(1, "ahk_id " settingsHwnd)
 
 	return result
+}
+
+class DrawingColors {
+	static Defaults := [{ hk: "r", val: 0xFF0000 }, { hk: "g", val: 0x00FF00 }, { hk: "b", val: 0x0000FF }, { hk: "y",
+		val: 0xFFFF00 }, { hk: "m", val: 0xFF00FF }, { hk: "c", val: 0x00FFFF }, { hk: "o", val: 0xFFA500 }, { hk: "v",
+			val: 0x7F00FF }, { hk: "s", val: 0x8B4513 }, { hk: "w", val: 0xFFFFFF }, { hk: "n", val: 0x808080 }, { hk: "k",
+				val: 0x000000 }
+	]
+	static List := []
+	static Load() {
+		this.List := []
+		iniReadResult := IniRead(App.iniPath, "Colors", , "")
+
+		if (iniReadResult != "") {
+			for line in StrSplit(iniReadResult, "`n", "`r") {
+				if (line = "")
+					continue
+				parts := StrSplit(line, "=")
+				if (parts.Length = 2) {
+					hk := Trim(parts[1])
+					try {
+						cVal := Integer(Trim(parts[2]))
+						this.List.Push({ hk: hk, val: cVal })
+					}
+				}
+			}
+		}
+
+		if (this.List.Length = 0) {
+			for item in this.Defaults
+				this.List.Push({ hk: item.hk, val: item.val })
+		}
+	}
+
+	static GetDefaultIniSection() {
+		str := "[Colors]`n"
+		for item in this.Defaults
+			str .= item.hk "=" Format("0x{:06X}", item.val) "`n"
+		return str
+	}
+}
+
+class AppConfig {
+	static Defaults := {
+		Settings: {
+			StartupLineWidth: 2,
+			MinLineWidth: 1,
+			MaxLineWidth: 10,
+			DrawAlpha: 200,
+			FrameIntervalMs: 16,
+			MinPointStep: 3,
+			ClearOnExit: false,
+			ShowColorHints: true,
+			SaveLastUsedOnExit: true,
+			MaxHistorySize: 200
+		},
+		Hotkeys: {
+			ToggleDrawingMode: "^F9",
+			ExitApp: "^+F12",
+			ClearDrawing: "Esc",
+			UndoDrawing: "Backspace",
+			RedoDrawing: "+Backspace",
+			IncreaseLineWidth: "^NumpadAdd",
+			DecreaseLineWidth: "^NumpadSub",
+			HotkeysHelp: "F1"
+		}
+	}
+
+	static GetDefaultIniString() {
+		d := this.Defaults
+
+		return "[Settings]`n"
+		. "StartupLineWidth=" d.Settings.StartupLineWidth "`n"
+			. "MinLineWidth=" d.Settings.MinLineWidth "`n"
+			. "MaxLineWidth=" d.Settings.MaxLineWidth "`n"
+			. "DrawAlpha=" d.Settings.DrawAlpha "`n"
+			. "FrameIntervalMs=" d.Settings.FrameIntervalMs "`n"
+			. "MinPointStep=" d.Settings.MinPointStep "`n"
+			. "ClearOnExit=" (d.Settings.ClearOnExit ? "true" : "false") "`n"
+			. "ShowColorHints=" (d.Settings.ShowColorHints ? "true" : "false") "`n"
+			. "SaveLastUsedOnExit=" (d.Settings.SaveLastUsedOnExit ? "true" : "false") "`n"
+			. "MaxHistorySize=" d.Settings.MaxHistorySize "`n`n"
+			. "[Hotkeys]`n"
+			. "ToggleDrawingMode=" d.Hotkeys.ToggleDrawingMode "`n"
+			. "ExitApp=" d.Hotkeys.ExitApp "`n"
+			. "ClearDrawing=" d.Hotkeys.ClearDrawing "`n"
+			. "UndoDrawing=" d.Hotkeys.UndoDrawing "`n"
+			. "RedoDrawing=" d.Hotkeys.RedoDrawing "`n"
+			. "IncreaseLineWidth=" d.Hotkeys.IncreaseLineWidth "`n"
+			. "DecreaseLineWidth=" d.Hotkeys.DecreaseLineWidth "`n"
+			. "HotkeysHelp=" d.Hotkeys.HotkeysHelp "`n`n"
+			. DrawingColors.GetDefaultIniSection() "`n"
+			. "[LastUsed]`n"
+	}
+
+	line := {}
+	drawAlpha := 0
+	frameIntervalMs := 0
+	minPointStep := 0
+	maxHistorySize := 0
+	clearOnExit := false
+	showColorHints := false
+	saveLastUsed := false
+	lastUsed := { W: 0, A: -1, C: "" }
+
+	hotkeys := {}
+
+	lastUsedColorRGB := 0
+	hasLastUsedColor := false
+
+	colors := DrawingColors
+
+	__New() {
+		d := AppConfig.Defaults.Settings
+
+		this.line.minWidth := d.MinLineWidth
+		this.line.maxWidth := d.MaxLineWidth
+		this.line.width := d.StartupLineWidth
+		this.drawAlpha := d.DrawAlpha
+		this.frameIntervalMs := d.FrameIntervalMs
+		this.minPointStep := d.MinPointStep
+		this.maxHistorySize := d.MaxHistorySize
+		this.clearOnExit := d.ClearOnExit
+		this.showColorHints := d.ShowColorHints
+		this.saveLastUsed := d.SaveLastUsedOnExit
+
+		iniSettings := IniRead(App.iniPath, "Settings", , "")
+		if (iniSettings != "") {
+			for line in StrSplit(iniSettings, "`n", "`r") {
+				if (line = "")
+					continue
+				parts := StrSplit(line, "=", , 2)
+				if (parts.Length = 2) {
+					key := Trim(parts[1])
+					val := Trim(parts[2])
+					try {
+						switch key {
+							case "MinLineWidth": this.line.minWidth := Integer(val)
+							case "MaxLineWidth": this.line.maxWidth := Integer(val)
+							case "StartupLineWidth": this.line.width := Integer(val)
+							case "DrawAlpha": this.drawAlpha := Integer(val)
+							case "FrameIntervalMs": this.frameIntervalMs := Integer(val)
+							case "MinPointStep": this.minPointStep := Integer(val)
+							case "MaxHistorySize": this.maxHistorySize := Integer(val)
+							case "ClearOnExit": this.clearOnExit := this._ParseBool(val)
+							case "ShowColorHints": this.showColorHints := this._ParseBool(val)
+							case "SaveLastUsedOnExit": this.saveLastUsed := this._ParseBool(val)
+						}
+					} catch {
+						; Skip malformed values; defaults are already set above
+					}
+				}
+			}
+		}
+
+		this.hotkeys := {
+			toggle: AppConfig.Defaults.Hotkeys.ToggleDrawingMode,
+			exit: AppConfig.Defaults.Hotkeys.ExitApp,
+			clear: AppConfig.Defaults.Hotkeys.ClearDrawing,
+			undo: AppConfig.Defaults.Hotkeys.UndoDrawing,
+			redo: AppConfig.Defaults.Hotkeys.RedoDrawing,
+			incLine: AppConfig.Defaults.Hotkeys.IncreaseLineWidth,
+			decLine: AppConfig.Defaults.Hotkeys.DecreaseLineWidth,
+			help: AppConfig.Defaults.Hotkeys.HotkeysHelp
+		}
+
+		iniHotkeys := IniRead(App.iniPath, "Hotkeys", , "")
+		if (iniHotkeys != "") {
+			for line in StrSplit(iniHotkeys, "`n", "`r") {
+				if (line = "")
+					continue
+				parts := StrSplit(line, "=", , 2)
+				if (parts.Length = 2) {
+					key := Trim(parts[1])
+					val := Trim(parts[2])
+					try {
+						switch key {
+							case "ToggleDrawingMode": this.hotkeys.toggle := val
+							case "ExitApp": this.hotkeys.exit := val
+							case "ClearDrawing": this.hotkeys.clear := val
+							case "UndoDrawing": this.hotkeys.undo := val
+							case "RedoDrawing": this.hotkeys.redo := val
+							case "IncreaseLineWidth": this.hotkeys.incLine := val
+							case "DecreaseLineWidth": this.hotkeys.decLine := val
+							case "HotkeysHelp": this.hotkeys.help := val
+						}
+					} catch {
+						; Skip malformed hotkey entries; defaults remain
+					}
+				}
+			}
+		}
+
+		iniLastUsed := IniRead(App.iniPath, "LastUsed", , "")
+		if (iniLastUsed != "") {
+			for line in StrSplit(iniLastUsed, "`n", "`r") {
+				if (line = "")
+					continue
+				parts := StrSplit(line, "=", , 2)
+				if (parts.Length = 2) {
+					key := Trim(parts[1])
+					val := Trim(parts[2])
+					try {
+						switch key {
+							case "LineWidth": this.lastUsed.W := Integer(val)
+							case "DrawAlpha": this.lastUsed.A := Integer(val)
+							case "Color": this.lastUsed.C := val
+						}
+					} catch {
+						; Skip malformed last-used values; defaults remain
+					}
+				}
+			}
+		}
+
+		this.line.minWidth := Max(this.line.minWidth, 1)
+		if (this.line.maxWidth < this.line.minWidth)
+			this.line.maxWidth := this.line.minWidth
+		this.line.width := Max(Min(this.line.width, this.line.maxWidth), this.line.minWidth)
+		this.drawAlpha := Max(Min(this.drawAlpha, 255), 0)
+		this.frameIntervalMs := Max(this.frameIntervalMs, 1)
+		this.minPointStep := Max(this.minPointStep, 1)
+		this.maxHistorySize := Max(this.maxHistorySize, 10)  ; At least 10 undo steps
+
+		if (this.lastUsed.W >= this.line.minWidth && this.lastUsed.W <= this.line.maxWidth)
+			this.line.width := this.lastUsed.W
+		if (this.lastUsed.A >= 0 && this.lastUsed.A <= 255)
+			this.drawAlpha := this.lastUsed.A
+		if (this.lastUsed.C != "") {
+			try {
+				this.lastUsedColorRGB := Integer(this.lastUsed.C)
+				this.hasLastUsedColor := true
+			}
+		}
+
+		this.colors.Load()
+	}
+
+	_ParseBool(val) {
+		val := StrLower(Trim(val))
+		return (val = "1" || val = "true" || val = "yes" || val = "on")
+	}
+}
+
+class GDIContext {
+	isDestroyed := false
+	token := 0
+	hBitmapBackground := 0
+	hdcMem := 0
+	hbmBuffer := 0
+	hbmDefault := 0
+	G_Mem := 0
+	G_Baked := 0
+	hdcBaked := 0
+	hbmBaked := 0
+	hbmBakedDefault := 0
+
+	; Startup GDI+
+	Init() {
+		try {
+			this.isDestroyed := false
+			this.token := Gdip_Startup()
+		} catch Error as e {
+			MsgBox("GDI+ Error: " e.Message, "Error", 48)
+			ExitApp
+		}
+	}
+
+	; Create resources for a specific monitor
+	CreateBuffer(monNum, width, height) {
+		this.DestroyBuffer()
+
+		this.hBitmapBackground := Gdip_BitmapFromScreen(monNum)
+		if (this.hBitmapBackground <= 0) {
+			this.hBitmapBackground := 0
+			throw Error("Failed to capture screen.")
+		}
+
+		hdcScreen := DllCall("GetDC", "Ptr", 0, "Ptr")
+		this.hdcMem := DllCall("CreateCompatibleDC", "Ptr", hdcScreen, "Ptr")
+		this.hbmBuffer := DllCall("CreateCompatibleBitmap", "Ptr", hdcScreen, "Int", width, "Int", height, "Ptr")
+		this.hdcBaked := DllCall("CreateCompatibleDC", "Ptr", hdcScreen, "Ptr")
+		this.hbmBaked := DllCall("CreateCompatibleBitmap", "Ptr", hdcScreen, "Int", width, "Int", height, "Ptr")
+		DllCall("ReleaseDC", "Ptr", 0, "Ptr", hdcScreen)
+
+		if (!this.hdcMem || !this.hbmBuffer || !this.hdcBaked || !this.hbmBaked) {
+			this.DestroyBuffer()
+			throw Error("Failed to create memory DC or bitmap.")
+		}
+
+		this.hbmDefault := DllCall("SelectObject", "Ptr", this.hdcMem, "Ptr", this.hbmBuffer, "Ptr")
+		this.hbmBakedDefault := DllCall("SelectObject", "Ptr", this.hdcBaked, "Ptr", this.hbmBaked, "Ptr")
+
+		this.G_Mem := Gdip_GraphicsFromHDC(this.hdcMem)
+		this.G_Baked := Gdip_GraphicsFromHDC(this.hdcBaked)
+
+		if (!this.G_Mem || !this.G_Baked) {
+			this.DestroyBuffer()
+			throw Error("Failed to get GDI+ graphics context.")
+		}
+
+		Gdip_SetSmoothingMode(this.G_Mem, 4)
+		Gdip_SetSmoothingMode(this.G_Baked, 4)
+	}
+
+	; Cleanup only the drawing buffers (when switching monitors or exiting drawing mode)
+	DestroyBuffer() {
+		if (this.G_Mem) {
+			Gdip_DeleteGraphics(this.G_Mem)
+			this.G_Mem := 0
+		}
+		if (this.hdcMem) {
+			if (this.hbmBuffer) {
+				if (this.hbmDefault && this.hbmDefault != -1)
+					DllCall("SelectObject", "Ptr", this.hdcMem, "Ptr", this.hbmDefault)
+				DllCall("DeleteObject", "Ptr", this.hbmBuffer)
+				this.hbmBuffer := 0
+			}
+			this.hbmDefault := 0
+			DllCall("DeleteDC", "Ptr", this.hdcMem)
+			this.hdcMem := 0
+		}
+		if (this.G_Baked) {
+			Gdip_DeleteGraphics(this.G_Baked)
+			this.G_Baked := 0
+		}
+		if (this.hdcBaked) {
+			if (this.hbmBaked) {
+				if (this.hbmBakedDefault && this.hbmBakedDefault != -1)
+					DllCall("SelectObject", "Ptr", this.hdcBaked, "Ptr", this.hbmBakedDefault)
+				DllCall("DeleteObject", "Ptr", this.hbmBaked)
+				this.hbmBaked := 0
+			}
+			this.hbmBakedDefault := 0
+			DllCall("DeleteDC", "Ptr", this.hdcBaked)
+			this.hdcBaked := 0
+		}
+		if (this.hBitmapBackground) {
+			Gdip_DisposeImage(this.hBitmapBackground)
+			this.hBitmapBackground := 0
+		}
+	}
+
+	; Full cleanup including GDI+ shutdown
+	Destroy() {
+		if (this.isDestroyed)
+			return
+
+		this.isDestroyed := true
+		this.DestroyBuffer()
+		if (this.token) {
+			Gdip_Shutdown(this.token)
+			this.token := 0
+		}
+	}
+
+	__Delete() => this.Destroy()
 }
