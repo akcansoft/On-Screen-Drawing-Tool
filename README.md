@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.3-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
+[![Version](https://img.shields.io/badge/Version-1.4-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/akcansoft/On-Screen-Drawing-Tool?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/akcansoft/On-Screen-Drawing-Tool?style=social)
@@ -31,6 +31,7 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 - Multi-monitor support — starts on the monitor the mouse cursor is on
 - Per-monitor DPI awareness with multiple fallbacks for mixed-scaling setups
 - Shapes are preserved across drawing sessions (within the same monitor)
+- Remembers your last used drawing settings (color, line width, opacity) across application restarts
 
 ## Requirements
 
@@ -63,41 +64,41 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 
 ### Global hotkeys (always active)
 
-| Hotkey           | Action                     |
-| ---------------- | -------------------------- |
-| <kbd>Ctrl</kbd>+<kbd>F9</kbd>        | Toggle drawing mode on/off |
-| <kbd>F1</kbd>             | Show hotkeys help          |
+| Hotkey                                          | Action                     |
+| ----------------------------------------------- | -------------------------- |
+| <kbd>Ctrl</kbd>+<kbd>F9</kbd>                   | Toggle drawing mode on/off |
+| <kbd>F1</kbd>                                   | Show hotkeys help          |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F12</kbd> | Exit the application       |
 
 ### While in drawing mode
 
-| Hotkey / Action            | Description                    |
-| -------------------------- | ------------------------------ |
-| <kbd>Esc</kbd>                      | Clear all drawings             |
-| <kbd>Backspace</kbd>                | Undo last drawing action (can restore a cleared screen) |
-| <kbd>Shift</kbd>+<kbd>Backspace</kbd>          | Redo last undone action        |
-| <kbd>XButton1</kbd> (Mouse Back)    | Undo last drawing action (can restore a cleared screen) |
-| <kbd>XButton2</kbd> (Mouse Forward) | Redo last undone action        |
-| <kbd>Ctrl</kbd>+<kbd>NumpadAdd</kbd>           | Increase line width            |
-| <kbd>Ctrl</kbd>+<kbd>NumpadSub</kbd>           | Decrease line width            |
-| <kbd>WheelUp</kbd> / <kbd>WheelDown</kbd>      | Increase / decrease line width |
-| Right-click on overlay     | Open in-place settings panel   |
+| Hotkey / Action                           | Description                                             |
+| ----------------------------------------- | ------------------------------------------------------- |
+| <kbd>Esc</kbd>                            | Clear all drawings                                      |
+| <kbd>Backspace</kbd>                      | Undo last drawing action (can restore a cleared screen) |
+| <kbd>Shift</kbd>+<kbd>Backspace</kbd>     | Redo last undone action                                 |
+| <kbd>XButton1</kbd> (Mouse Back)          | Undo last drawing action (can restore a cleared screen) |
+| <kbd>XButton2</kbd> (Mouse Forward)       | Redo last undone action                                 |
+| <kbd>Ctrl</kbd>+<kbd>NumpadAdd</kbd>      | Increase line width                                     |
+| <kbd>Ctrl</kbd>+<kbd>NumpadSub</kbd>      | Decrease line width                                     |
+| <kbd>WheelUp</kbd> / <kbd>WheelDown</kbd> | Increase / decrease line width                          |
+| Right-click on overlay                    | Open in-place settings panel                            |
 
 ### Tool selection (hold modifier before clicking to draw)
 
-| Modifier     | Tool                                       |
-| ------------ | ------------------------------------------ |
-| *(none)*     | Freehand                                   |
-| <kbd>Shift</kbd>      | Straight line                              |
-| <kbd>Ctrl</kbd>       | Rectangle                                  |
-| <kbd>Alt</kbd>        | Ellipse                                    |
+| Modifier                         | Tool                                       |
+| -------------------------------- | ------------------------------------------ |
+| *(none)*                         | Freehand                                   |
+| <kbd>Shift</kbd>                 | Straight line                              |
+| <kbd>Ctrl</kbd>                  | Rectangle                                  |
+| <kbd>Alt</kbd>                   | Ellipse                                    |
 | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>   | Circle (radius = max of X/Y drag distance) |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd> | Arrow (with auto-sized filled arrowhead)   |
 
 ### Color hotkeys (default, configurable in `settings.ini`)
 
-| Key | Color  | Key | Color   | Key | Color |
-| --- | ------ | --- | ------- | --- | ----- |
+| Key          | Color  | Key          | Color   | Key          | Color |
+| ------------ | ------ | ------------ | ------- | ------------ | ----- |
 | <kbd>r</kbd> | Red    | <kbd>m</kbd> | Magenta | <kbd>s</kbd> | Brown |
 | <kbd>g</kbd> | Green  | <kbd>c</kbd> | Cyan    | <kbd>w</kbd> | White |
 | <kbd>b</kbd> | Blue   | <kbd>o</kbd> | Orange  | <kbd>n</kbd> | Gray  |
@@ -142,21 +143,23 @@ The app reads `settings.ini` from the script/exe directory on startup. Missing k
 
 ### [Settings] keys
 
-| Key                | Description                         | Default |
-| ------------------ | ----------------------------------- | ------- |
-| `StartupLineWidth` | Initial stroke width                | `2`     |
-| `MinLineWidth`     | Minimum allowed width               | `1`     |
-| `MaxLineWidth`     | Maximum allowed width               | `10`    |
-| `DrawAlpha`        | Drawing opacity (0–255; 255 = fully opaque) | `200`   |
-| `FrameIntervalMs`  | Overlay redraw interval (milliseconds) | `16`    |
-| `MinPointStep`     | Min distance for freehand points    | `3`     |
-| `ClearOnExit`      | Discard shapes when closing overlay | `false` |
-| `ShowColorHints`   | Show hotkey hints on color swatches | `true`  |
+| Key                  | Description                                 | Default |
+| -------------------- | ------------------------------------------- | ------- |
+| `StartupLineWidth`   | Initial stroke width                        | `2`     |
+| `MinLineWidth`       | Minimum allowed width                       | `1`     |
+| `MaxLineWidth`       | Maximum allowed width                       | `10`    |
+| `DrawAlpha`          | Drawing opacity (0–255; 255 = fully opaque) | `200`   |
+| `FrameIntervalMs`    | Overlay redraw interval (milliseconds)      | `16`    |
+| `MinPointStep`       | Min distance for freehand points            | `3`     |
+| `ClearOnExit`        | Discard shapes when closing overlay         | `false` |
+| `ShowColorHints`     | Show hotkey hints on color swatches         | `true`  |
+| `SaveLastUsedOnExit` | Remember color, width, opacity on exit      | `true`  |
+| `MaxHistorySize`     | Maximum undo steps to retain                | `200`   |
 
 ### [Hotkeys] keys
 
-| Key                 | Description                | Default      |
-| ------------------- | -------------------------- | ------------ |
+| Key                 | Description                | Default               |
+| ------------------- | -------------------------- | --------------------- |
 | `ToggleDrawingMode` | Start/Stop drawing         | <kbd>^F9</kbd>        |
 | `ExitApp`           | Close application          | <kbd>^+F12</kbd>      |
 | `ClearDrawing`      | Clear all shapes           | <kbd>Esc</kbd>        |
@@ -174,6 +177,12 @@ The app reads `settings.ini` from the script/exe directory on startup. Missing k
 - `app_icon.ico` (Icon)
 
 ## Version History
+
+### v1.4 12/03/2026
+
+- **Persistent Settings**: The application now automatically saves your last used color, line width, and opacity when exiting, and restores them on the next launch. Two new INI settings (`SaveLastUsedOnExit`, `MaxHistorySize`) have been added.
+- **Performance Optimization**: Major improvements to the freehand drawing tool to avoid memory bottlenecks and provide significantly smoother drawing.
+- **Code Organization**: Restructured configuration classes and grouped global variables to improve reliability and adhere strictly to DRY principles.
 
 ### v1.3 08/03/2026
 
