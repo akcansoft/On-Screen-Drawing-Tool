@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.4-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
+[![Version](https://img.shields.io/badge/Version-1.5-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/akcansoft/On-Screen-Drawing-Tool?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/akcansoft/On-Screen-Drawing-Tool?style=social)
@@ -20,24 +20,25 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 
 - Fast overlay drawing with GDI+ anti-aliased rendering
 - Drawing tools: freehand, straight line, rectangle, ellipse, circle, arrow
+- **Ortho mode** (F8 by default) — locks line and arrow drawing to horizontal or vertical axis
 - Dynamic line width and opacity controls
-- Color palette with single-key shortcuts (fully configurable in `settings.ini`)
-- Built-in hotkeys help dialog (<kbd>F1</kbd> by default, configurable in `settings.ini`)
-- **Undo and Redo** support for all drawing actions, including clearing the screen
-- Clear all drawings while in drawing mode with a single key or button
+- Color palette with single-key shortcuts (fully configurable via Settings)
+- Built-in hotkeys help dialog (<kbd>F1</kbd> by default, configurable)
+- **Undo / Redo** support for all drawing actions including clear — full linear history, no steps lost
+- Clear all drawings with a single key; clear is itself undoable/redoable
 - Right-click in-place settings panel: color picker, line width, opacity, quick actions
 - Pen cursor while drawing mode is active
-- **Always-on-top** help and info windows that don't get lost behind the overlay
+- **Always-on-top** help and settings windows that don't get lost behind the overlay
 - Multi-monitor support — starts on the monitor the mouse cursor is on
 - Per-monitor DPI awareness with multiple fallbacks for mixed-scaling setups
 - Shapes are preserved across drawing sessions (within the same monitor)
-- Remembers your last used drawing settings (color, line width, opacity) across application restarts
+- Remembers last used drawing settings (color, line width, opacity) across restarts
 
 ## Requirements
 
 - Windows
 - [AutoHotkey v2.x](https://www.autohotkey.com/) (for source usage only)
-- `Gdip_all.ahk` in the same folder as the main script
+- `Gdip.ahk` in the same folder as the main script
 
 If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 
@@ -48,7 +49,10 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 1. Install [AutoHotkey v2](https://www.autohotkey.com/).
 2. Keep these files in the same directory:
    - `On Screen Drawing.ahk`
-   - `Gdip_all.ahk`
+   - `Gdip.ahk`
+   - `AppLib.ahk`
+   - `Settings.ahk`
+   - `Help.ahk`
    - `settings.ini` (optional — defaults are applied automatically)
    - `app_icon.ico` (optional — used for the tray icon)
 3. Run `On Screen Drawing.ahk`.
@@ -64,202 +68,224 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 
 ### Global hotkeys (always active)
 
-| Hotkey                                          | Action                     |
-| ----------------------------------------------- | -------------------------- |
-| <kbd>Ctrl</kbd>+<kbd>F9</kbd>                   | Toggle drawing mode on/off |
-| <kbd>F1</kbd>                                   | Show hotkeys help          |
-| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F12</kbd> | Exit the application       |
+| Hotkey | Action |
+| --- | --- |
+| <kbd>Ctrl</kbd>+<kbd>F9</kbd> | Toggle drawing mode on/off |
+| <kbd>F1</kbd> | Show hotkeys help |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F12</kbd> | Exit the application |
 
 ### While in drawing mode
 
-| Hotkey / Action                           | Description                                             |
-| ----------------------------------------- | ------------------------------------------------------- |
-| <kbd>Esc</kbd>                            | Clear all drawings                                      |
-| <kbd>Backspace</kbd>                      | Undo last drawing action (can restore a cleared screen) |
-| <kbd>Shift</kbd>+<kbd>Backspace</kbd>     | Redo last undone action                                 |
-| <kbd>XButton1</kbd> (Mouse Back)          | Undo last drawing action (can restore a cleared screen) |
-| <kbd>XButton2</kbd> (Mouse Forward)       | Redo last undone action                                 |
-| <kbd>Ctrl</kbd>+<kbd>NumpadAdd</kbd>      | Increase line width                                     |
-| <kbd>Ctrl</kbd>+<kbd>NumpadSub</kbd>      | Decrease line width                                     |
-| <kbd>WheelUp</kbd> / <kbd>WheelDown</kbd> | Increase / decrease line width                          |
-| Right-click on overlay                    | Open in-place settings panel                            |
+| Hotkey / Action | Description |
+| --- | --- |
+| <kbd>Esc</kbd> | Clear all drawings (undoable) |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo last action (shape or clear) |
+| <kbd>Ctrl</kbd>+<kbd>Y</kbd> | Redo last undone action |
+| <kbd>XButton1</kbd> (Mouse Back) | Undo last action |
+| <kbd>XButton2</kbd> (Mouse Forward) | Redo last undone action |
+| <kbd>F8</kbd> | Toggle Ortho mode (line/arrow only) |
+| <kbd>Ctrl</kbd>+<kbd>NumpadAdd</kbd> | Increase line width |
+| <kbd>Ctrl</kbd>+<kbd>NumpadSub</kbd> | Decrease line width |
+| <kbd>WheelUp</kbd> / <kbd>WheelDown</kbd> | Increase / decrease line width |
+| Right-click on overlay | Open in-place settings panel |
 
-### Tool selection (hold modifier before clicking to draw)
+### Tool selection (hold modifier while clicking to draw)
 
-| Modifier                         | Tool                                       |
-| -------------------------------- | ------------------------------------------ |
-| *(none)*                         | Freehand                                   |
-| <kbd>Shift</kbd>                 | Straight line                              |
-| <kbd>Ctrl</kbd>                  | Rectangle                                  |
-| <kbd>Alt</kbd>                   | Ellipse                                    |
-| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>   | Circle (radius = max of X/Y drag distance) |
-| <kbd>Ctrl</kbd>+<kbd>Shift</kbd> | Arrow (with auto-sized filled arrowhead)   |
+| Modifier | Tool |
+| --- | --- |
+| *(none)* | Freehand |
+| <kbd>Shift</kbd> | Straight line |
+| <kbd>Ctrl</kbd> | Rectangle |
+| <kbd>Alt</kbd> | Ellipse |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd> | Circle (radius = max of X/Y drag distance) |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd> | Arrow (with auto-sized filled arrowhead) |
 
-### Color hotkeys (default, configurable in `settings.ini`)
+### Color hotkeys (default, configurable in Settings)
 
-| Key          | Color  | Key          | Color   | Key          | Color |
-| ------------ | ------ | ------------ | ------- | ------------ | ----- |
-| <kbd>r</kbd> | Red    | <kbd>m</kbd> | Magenta | <kbd>s</kbd> | Brown |
-| <kbd>g</kbd> | Green  | <kbd>c</kbd> | Cyan    | <kbd>w</kbd> | White |
-| <kbd>b</kbd> | Blue   | <kbd>o</kbd> | Orange  | <kbd>n</kbd> | Gray  |
-| <kbd>y</kbd> | Yellow | <kbd>v</kbd> | Violet  | <kbd>k</kbd> | Black |
+| Key | Color | Key | Color | Key | Color |
+| --- | --- | --- | --- | --- | --- |
+| <kbd>r</kbd> | Red | <kbd>m</kbd> | Magenta | <kbd>s</kbd> | Brown |
+| <kbd>g</kbd> | Green | <kbd>c</kbd> | Cyan | <kbd>w</kbd> | White |
+| <kbd>b</kbd> | Blue | <kbd>o</kbd> | Orange | <kbd>n</kbd> | Gray |
+| <kbd>y</kbd> | Yellow | <kbd>v</kbd> | Violet | <kbd>k</kbd> | Black |
 
 > Color hotkeys are only active while drawing mode is on and the mouse cursor is on the active monitor.
 
+## Ortho Mode
+
+Press <kbd>F8</kbd> (configurable) while in drawing mode to toggle Ortho mode on/off. A tooltip confirms the current state.
+
+When Ortho mode is active, **line** and **arrow** tools are constrained to the dominant axis — horizontal if the horizontal drag distance is greater, vertical otherwise. All other tools (freehand, rect, ellipse, circle) are unaffected.
+
+## Undo / Redo
+
+The undo/redo system treats every action — including **Clear** — as a step in a single linear history. You can freely undo and redo across clear operations without losing any shapes.
+
+The history size limit (`MaxHistorySize`, default 200) applies to the total number of entries including clear markers.
+
 ## Right-Click Settings Panel
 
-Right-clicking anywhere on the overlay opens a compact floating panel that includes:
+Right-clicking anywhere on the overlay opens a compact floating panel:
 
 ![](docs/screen-shot-2.png) ![](docs/screen-shot-3.png)
 
-- **Color grid** — shows configured colors in a 3-column grid. The active color is marked with a ✓ checkmark, and hotkey hints are displayed on each swatch by default.
-- **Line width** — numeric edit field with up/down spinner (1–10 by default).
+- **Color grid** — configured colors in a 3-column grid. Active color marked with ✓; hotkey hints shown on each swatch (configurable).
+- **Line width** — numeric edit field with up/down spinner.
 - **Opacity** — numeric edit field with up/down spinner (0–255).
-- **Quick action buttons:**
-  - **Undo** / **Redo**
-  - **Clear** — removes all drawings
-  - **Help** — shows the hotkeys help dialog
-  - **Stop drawing** — exit drawing mode
-  - **Exit application**
+- **Quick action buttons:** Undo, Redo, Clear, Help, Stop Drawing, Exit App
 
-The panel snaps to within the active monitor's bounds. Press <kbd>Esc</kbd> or click away to close it.
+The panel snaps within the active monitor's bounds. Press <kbd>Esc</kbd> or click away to close it.
 
 ## Tray Menu
 
 Right-clicking the tray icon shows:
 
-- **About** — shows app and author information
-- **Hotkeys Help** — displays all active hotkeys
-- **GitHub repo** — opens the project repository
-- **Open settings.ini** — opens the config file in Notepad
-- **Reset to Defaults** — restores original settings
-- **Reload Script** — reloads the application
-- **Start/Stop Drawing** — toggles drawing mode
+- **Help** — displays the help window (app info, hotkeys, author links)
+- **Settings** — opens the application settings window
+- **Restart Application** — reloads the script
+- **Start / Stop Drawing** — toggles drawing mode
 - **Exit** — closes the app
+
+## Settings Window
+
+Open via tray menu or the Settings button in the Help window. Changes to hotkeys or colors require a restart to take effect (the app will prompt you).
+
+Tabs:
+- **General** — numeric settings and behavior toggles
+- **Hotkeys** — all configurable hotkeys
+- **Colors** — color palette management (add, edit, delete entries)
 
 ## settings.ini Reference
 
-The app reads `settings.ini` from the script/exe directory on startup. Missing keys fall back to defaults. You can reset the file to defaults at any time via the tray menu.
+The app reads `settings.ini` from the script/exe directory on startup. Missing keys fall back to defaults.
+
+> All settings can also be edited through the built-in **Settings window** (tray menu → Settings). Changes are saved back to `settings.ini` automatically.
 
 ### [Settings] keys
 
-| Key                  | Description                                 | Default |
-| -------------------- | ------------------------------------------- | ------- |
-| `StartupLineWidth`   | Initial stroke width                        | `2`     |
-| `MinLineWidth`       | Minimum allowed width                       | `1`     |
-| `MaxLineWidth`       | Maximum allowed width                       | `10`    |
-| `DrawAlpha`          | Drawing opacity (0–255; 255 = fully opaque) | `200`   |
-| `FrameIntervalMs`    | Overlay redraw interval (milliseconds)      | `16`    |
-| `MinPointStep`       | Min distance for freehand points            | `3`     |
-| `ClearOnExit`        | Discard shapes when closing overlay         | `false` |
-| `ShowColorHints`     | Show hotkey hints on color swatches         | `true`  |
-| `SaveLastUsedOnExit` | Remember color, width, opacity on exit      | `true`  |
-| `MaxHistorySize`     | Maximum undo steps to retain                | `200`   |
+| Key | Description | Default |
+| --- | --- | --- |
+| `MinLineWidth` | Minimum allowed stroke width | `1` |
+| `MaxLineWidth` | Maximum allowed stroke width | `10` |
+| `DrawAlpha` | Drawing opacity (0–255) | `200` |
+| `FrameIntervalMs` | Overlay redraw interval (ms) | `16` |
+| `MinPointStep` | Min pixel distance between freehand points | `3` |
+| `MaxHistorySize` | Maximum undo/redo steps | `200` |
+| `ClearOnExitDraw` | Discard shapes when exiting drawing mode | `false` |
+| `ShowColorHints` | Show hotkey hints on color swatches | `true` |
+| `SaveLastUsedOnExit` | Remember color, width, opacity on exit | `true` |
+| `showHelpOnStartup` | Show help window on application start | `true` |
 
 ### [Hotkeys] keys
 
-| Key                 | Description                | Default               |
-| ------------------- | -------------------------- | --------------------- |
-| `ToggleDrawingMode` | Start/Stop drawing         | <kbd>^F9</kbd>        |
-| `ExitApp`           | Close application          | <kbd>^+F12</kbd>      |
-| `ClearDrawing`      | Clear all shapes           | <kbd>Esc</kbd>        |
-| `UndoDrawing`       | Remove last shape          | <kbd>Backspace</kbd>  |
-| `RedoDrawing`       | Restore last removed shape | <kbd>+Backspace</kbd> |
-| `IncreaseLineWidth` | Line width +               | <kbd>^NumpadAdd</kbd> |
-| `DecreaseLineWidth` | Line width -               | <kbd>^NumpadSub</kbd> |
-| `HotkeysHelp`       | Show help window           | <kbd>F1</kbd>         |
+| Key | Description | Default |
+| --- | --- | --- |
+| `ToggleDrawingMode` | Start/Stop drawing | `^F9` |
+| `ExitApp` | Close application | `^+F12` |
+| `ClearDrawing` | Clear all shapes | `Esc` |
+| `UndoDrawing` | Undo last action | `^z` |
+| `RedoDrawing` | Redo last undone action | `^y` |
+| `IncreaseLineWidth` | Line width + | `^NumpadAdd` |
+| `DecreaseLineWidth` | Line width - | `^NumpadSub` |
+| `OrthoMode` | Toggle ortho mode | `F8` |
+| `HotkeysHelp` | Show help window | `F1` |
+
+Hotkey syntax: `^` = Ctrl, `+` = Shift, `!` = Alt, `#` = Win. Example: `^+F9` = Ctrl+Shift+F9.
 
 ## Project Structure
 
-- `On Screen Drawing.ahk` (Main script)
-- `Gdip_all.ahk` (Required library)
-- `settings.ini` (Config file)
-- `app_icon.ico` (Icon)
+```
+On Screen Drawing.ahk           — Main script
+AppLib.ahk                      — Config classes and shared helpers
+Settings.ahk                    — Settings window
+Help.ahk                        — Help window
+Gdip.ahk                        — GDI+ wrapper library
+settings.ini                    — User configuration
+app_icon.ico                    — Tray icon
+```
 
-## Version History
+### v1.5 19/03/2026
+
+- **Settings Window**: All application settings (general options, hotkeys, color palette) can now be edited through a built-in GUI. Changes are saved to `settings.ini` automatically; hotkey and color changes take effect after restart.
+- **Help Window**: The separate About dialog and hotkeys help message box have been merged into a single always-on-top Help window. Includes app info, author links, full hotkey list, and a startup visibility toggle.
+- **Ortho Mode**: New F8 toggle (configurable) constrains line and arrow drawing to horizontal or vertical axis, similar to CAD ortho mode.
+- **Undo/Redo overhaul**: Clear is now a fully undoable/redoable step in the linear history. No shapes are lost when undoing or redoing across clear operations.
+- **Standard undo/redo hotkeys**: Changed from Backspace/Shift+Backspace to Ctrl+Z / Ctrl+Y.
 
 ### v1.4 12/03/2026
 
-- **Persistent Settings**: The application now automatically saves your last used color, line width, and opacity when exiting, and restores them on the next launch. Two new INI settings (`SaveLastUsedOnExit`, `MaxHistorySize`) have been added.
-- **Performance Optimization**: Major improvements to the freehand drawing tool to avoid memory bottlenecks and provide significantly smoother drawing.
-- **Code Organization**: Restructured configuration classes and grouped global variables to improve reliability and adhere strictly to DRY principles.
+- **Persistent Settings**: Automatically saves last used color, line width, and opacity on exit and restores them on next launch.
+- **Performance Optimization**: Major improvements to freehand drawing to avoid memory bottlenecks.
+- **Code Organization**: Restructured configuration classes and grouped global variables.
 
 ### v1.3 08/03/2026
 
-- **UI Enhancement**: Added hotkey hints to the color swatches in the right-click settings panel to improve discoverability.
-- **New Setting**: Introduced the `ShowColorHints` option in `settings.ini` to allow users to disable the new color hotkey hints if desired. This is enabled by default.
+- **UI Enhancement**: Added hotkey hints to color swatches in the right-click settings panel.
+- **New Setting**: `ShowColorHints` option to disable color hotkey hints.
 
 ### v1.2.2 07/03/2026
 
-- **Enhanced Undo/Redo**: Added support for undoing "Clear Drawing" actions, allowing users to restore all shapes after a total clear.
-- **Interaction Fixes**: Resolved an issue where the mouse wheel interfered with numeric editboxes in the settings panel; wheel scrolling now correctly adjusts the focused control's value.
-- **Code Refactoring & Optimization**: Major internal architecture update, centralizing application state and logic (using a unified `App` object and `DrawingColors` class) for improved reliability and performance.
+- **Enhanced Undo/Redo**: Added support for undoing Clear Drawing actions.
+- **Interaction Fixes**: Mouse wheel no longer interferes with numeric edit boxes in the settings panel.
+- **Code Refactoring**: Centralized application state using a unified `App` object and `DrawingColors` class.
 
 ### v1.2.0 06/03/2026
 
-- **Re-do Support**: Restored shapes are preserved in a stack; added `RedoLastShape` functionality.
-- **Mouse Shortcuts**: Fast undo/redo using mouse side buttons (<kbd>XButton1</kbd> and <kbd>XButton2</kbd>).
-- **Improved Settings GUI**:
-  - Added **Clear Drawing** and **Help** buttons to the panel.
-  - Reordered action buttons for better workflow (Help, Exit Drawing, Exit App).
-- **UI Fixes**:
-  - Help (<kbd>F1</kbd>) and About windows now stay on top and handle focus correctly during drawing (Modal-like overlay behavior).
+- **Redo Support**: Added `RedoLastShape` functionality with a redo stack.
+- **Mouse Shortcuts**: Undo/redo via mouse side buttons (XButton1/XButton2).
+- **Improved Settings GUI**: Added Clear and Help buttons; reordered action buttons.
 
 ### v1.1.0 05/03/2026
 
-- Added a configurable `HotkeysHelp` action with <kbd>F1</kbd> as the default shortcut.
-- Added `About` and `GitHub repo` items to the tray menu.
-- Updated tray menu labels to show the assigned hotkeys for drawing toggle, help, and exit actions.
-- Added a pen cursor while drawing mode is active.
-- Improved the floating settings panel so it hides and reopens cleanly instead of being recreated each time.
-- Improved settings panel state syncing for the selected color, line width, and opacity controls.
+- Added configurable `HotkeysHelp` action (F1 default).
+- Added pen cursor while drawing mode is active.
+- Improved floating settings panel (hide/reopen instead of recreate).
+- Updated tray menu labels to show assigned hotkeys.
 
 ### v1.0.0 05/03/2026
 
 - Initial public release.
-- Included overlay drawing tools for freehand, line, rectangle, ellipse, circle, and arrow.
-- Included configurable hotkeys, color shortcuts, tray menu actions, and `settings.ini` support.
+- Overlay drawing tools: freehand, line, rectangle, ellipse, circle, arrow.
+- Configurable hotkeys, color shortcuts, tray menu, `settings.ini` support.
 
 ## Troubleshooting
 
 **Nothing happens when pressing the toggle hotkey**
 - Check `ToggleDrawingMode` in `settings.ini`.
-- Ensure no other application is capturing the same hotkey combination.
+- Ensure no other application is capturing the same hotkey.
 
-**Error about GDI+ or screen capture on startup**
-- Verify that `Gdip_all.ahk` exists in the same folder as the script and is compatible with AHK v2.
+**Error about GDI+ on startup**
+- Verify that `Gdip.ahk` exists in the same folder as the script and is compatible with AHK v2.
 
 **Wrong position or scale on multi-monitor / mixed-DPI setups**
-- The script applies per-monitor DPI awareness with multiple fallbacks. Restart the app after changing monitor layout or DPI settings.
+- The script applies per-monitor DPI awareness with multiple fallbacks. Restart after changing monitor layout or DPI settings.
 
 **Color hotkeys do not work while drawing**
-- Confirm all `[Colors]` entries follow the `0xRRGGBB` format.
-- Make sure the mouse cursor is on the active drawing monitor — color hotkeys are restricted to that monitor.
+- Confirm all `[Colors]` entries use the `0xRRGGBB` format.
+- Make sure the mouse cursor is on the active drawing monitor.
 
 **Shapes disappear when re-entering drawing mode**
-- Check that `ClearOnExit` is set to `false` in `settings.ini`.
-- Note: switching to a different monitor always resets the shape list.
+- Check that `ClearOnExitDraw` is set to `false` in `settings.ini`.
+- Note: switching to a different monitor always resets the shape history.
 
 ## Contributing
 
 Issues and pull requests are welcome on [GitHub](https://github.com/akcansoft/On-Screen-Drawing-Tool).
 
 When reporting a bug, please include:
-
 - Windows version
 - AutoHotkey version (if running from source)
 - Your `settings.ini` contents
-- Steps to reproduce the issue
+- Steps to reproduce
 
 ## Credits
 
-- [Gdip_all.ahk](https://github.com/buliasz/AHKv2-Gdip/blob/master/Gdip_All.ahk) by [buliasz](https://github.com/buliasz) — GDI+ wrapper library for AutoHotkey v2
+- [Gdip_All.ahk](https://github.com/buliasz/AHKv2-Gdip/blob/master/Gdip_All.ahk) by [buliasz](https://github.com/buliasz) — GDI+ wrapper library for AutoHotkey v2. `Gdip.ahk` included in this project contains only the functions required by this project, extracted from the original.
 
 ## Author
 
 **Mesut Akcan**
 
 - GitHub: [akcansoft](https://github.com/akcansoft)
-- Blog: [akcansoft.blogspot.com](https://akcansoft.blogspot.com)
 - Blog: [mesutakcan.blogspot.com](https://mesutakcan.blogspot.com)
 - YouTube: [youtube.com/mesutakcan](https://www.youtube.com/mesutakcan)
