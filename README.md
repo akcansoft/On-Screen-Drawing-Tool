@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.5-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
+[![Version](https://img.shields.io/badge/Version-1.6-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/akcansoft/On-Screen-Drawing-Tool?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/akcansoft/On-Screen-Drawing-Tool?style=social)
@@ -12,7 +12,7 @@
 
 Lightweight on-screen annotation tool for Windows, built with AutoHotkey v2 and GDI+.
 
-Draw directly on top of any screen with multiple tools (freehand, line, rectangle, ellipse, circle, arrow), configurable hotkeys, and an INI-based settings system. Run it as source (`.ahk`) or as a compiled standalone `.exe`.
+Draw directly on top of any screen with multiple tools (freehand, line, rectangle, ellipse, circle, arrow), configurable hotkeys, background fill, and an INI-based settings system. Run it as source (`.ahk`) or as a compiled standalone `.exe`.
 
 ![](docs/screen-shot-1.png)
 
@@ -21,12 +21,13 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 - Fast overlay drawing with GDI+ anti-aliased rendering
 - Drawing tools: freehand, straight line, rectangle, ellipse, circle, arrow
 - **Ortho mode** (F8 by default) — locks line and arrow drawing to horizontal or vertical axis
+- **Background fill** — flood the screen with a solid color using a modifier + color hotkey (undoable)
 - Dynamic line width and opacity controls
 - Color palette with single-key shortcuts (fully configurable via Settings)
 - Built-in hotkeys help dialog (<kbd>F1</kbd> by default, configurable)
-- **Undo / Redo** support for all drawing actions including clear — full linear history, no steps lost
+- **Undo / Redo** support for all drawing actions including clear and fill — full linear history, no steps lost
 - Clear all drawings with a single key; clear is itself undoable/redoable
-- Right-click in-place settings panel: color picker, line width, opacity, quick actions
+- Right-click drawing toolbar: color picker, line width, opacity, quick actions
 - Pen cursor while drawing mode is active
 - **Always-on-top** help and settings windows that don't get lost behind the overlay
 - Multi-monitor support — starts on the monitor the mouse cursor is on
@@ -79,7 +80,7 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 | Hotkey / Action | Description |
 | --- | --- |
 | <kbd>Esc</kbd> | Clear all drawings (undoable) |
-| <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo last action (shape or clear) |
+| <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo last action (shape, clear or fill) |
 | <kbd>Ctrl</kbd>+<kbd>Y</kbd> | Redo last undone action |
 | <kbd>XButton1</kbd> (Mouse Back) | Undo last action |
 | <kbd>XButton2</kbd> (Mouse Forward) | Redo last undone action |
@@ -87,7 +88,7 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 | <kbd>Ctrl</kbd>+<kbd>NumpadAdd</kbd> | Increase line width |
 | <kbd>Ctrl</kbd>+<kbd>NumpadSub</kbd> | Decrease line width |
 | <kbd>WheelUp</kbd> / <kbd>WheelDown</kbd> | Increase / decrease line width |
-| Right-click on overlay | Open in-place settings panel |
+| Right-click on overlay | Open drawing toolbar |
 
 ### Tool selection (hold modifier while clicking to draw)
 
@@ -110,6 +111,15 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 | <kbd>y</kbd> | Yellow | <kbd>v</kbd> | Violet | <kbd>k</kbd> | Black |
 
 > Color hotkeys are only active while drawing mode is on and the mouse cursor is on the active monitor.
+> Press <kbd>Shift</kbd> + a color key (modifier configurable in Settings) to fill the entire background with that color. The fill is undoable.
+
+## Background Fill
+
+Press the fill modifier key (default: <kbd>Shift</kbd>) together with a color hotkey to flood the screen background with a solid color. The fill is treated as a step in the undo/redo history — press <kbd>Ctrl</kbd>+<kbd>Z</kbd> to revert it.
+
+The fill modifier key can be changed to Ctrl, Alt, or Win in Settings > Hotkeys.
+
+When a fill is active, pressing <kbd>Esc</kbd> (Clear) preserves the background fill color and only removes the shapes drawn on top of it.
 
 ## Ortho Mode
 
@@ -119,13 +129,13 @@ When Ortho mode is active, **line** and **arrow** tools are constrained to the d
 
 ## Undo / Redo
 
-The undo/redo system treats every action — including **Clear** — as a step in a single linear history. You can freely undo and redo across clear operations without losing any shapes.
+The undo/redo system treats every action — including **Clear** and **Fill** — as a step in a single linear history. You can freely undo and redo across clear and fill operations without losing any shapes.
 
-The history size limit (`MaxHistorySize`, default 200) applies to the total number of entries including clear markers.
+The history size limit (`MaxHistorySize`, default 200) applies to the total number of entries including clear and fill markers.
 
-## Right-Click Settings Panel
+## Drawing Toolbar
 
-Right-clicking anywhere on the overlay opens a compact floating panel:
+Right-clicking anywhere on the overlay opens a compact floating toolbar:
 
 ![](docs/screen-shot-2.png) ![](docs/screen-shot-3.png)
 
@@ -134,7 +144,7 @@ Right-clicking anywhere on the overlay opens a compact floating panel:
 - **Opacity** — numeric edit field with up/down spinner (0–255).
 - **Quick action buttons:** Undo, Redo, Clear, Help, Stop Drawing, Exit App
 
-The panel snaps within the active monitor's bounds. Press <kbd>Esc</kbd> or click away to close it.
+The toolbar snaps within the active monitor's bounds. Press <kbd>Esc</kbd> or click away to close it.
 
 ## Tray Menu
 
@@ -189,6 +199,7 @@ The app reads `settings.ini` from the script/exe directory on startup. Missing k
 | `DecreaseLineWidth` | Line width - | `^NumpadSub` |
 | `OrthoMode` | Toggle ortho mode | `F8` |
 | `HotkeysHelp` | Show help window | `F1` |
+| `FillModifier` | Modifier key for background fill | `+` (Shift) |
 
 Hotkey syntax: `^` = Ctrl, `+` = Shift, `!` = Alt, `#` = Win. Example: `^+F9` = Ctrl+Shift+F9.
 
@@ -203,6 +214,12 @@ Gdip.ahk                        — GDI+ wrapper library
 settings.ini                    — User configuration
 app_icon.ico                    — Tray icon
 ```
+
+### v1.6 20/03/2026
+
+- **Background Fill**: Press Shift (configurable) + a color hotkey to fill the screen background with a solid color. The fill is fully undoable/redoable. Clear (Esc) preserves the active fill color.
+- **Configurable fill modifier**: The fill modifier key (Shift, Ctrl, Alt, Win) can be changed in Settings > Hotkeys.
+- **Freehand fix**: A very short freehand stroke (2 points) is no longer discarded.
 
 ### v1.5 19/03/2026
 
