@@ -21,7 +21,7 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 - Fast overlay drawing with GDI+ anti-aliased rendering
 - Drawing tools: freehand, straight line, rectangle, ellipse, circle, arrow
 - **Ortho mode** (F8 by default) — locks line and arrow drawing to horizontal or vertical axis
-- **Background fill** — flood the screen with a solid color using a modifier + color hotkey (undoable)
+- **Background fill** — fill the screen with a solid color using a modifier + color hotkey, creating whiteboard, blackboard, or colored canvas effects (undoable)
 - Dynamic line width and opacity controls
 - Color palette with single-key shortcuts (fully configurable via Settings)
 - Built-in hotkeys help dialog (<kbd>F1</kbd> by default, configurable)
@@ -111,11 +111,11 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 | <kbd>y</kbd> | Yellow | <kbd>v</kbd> | Violet | <kbd>k</kbd> | Black |
 
 > Color hotkeys are only active while drawing mode is on and the mouse cursor is on the active monitor.
-> Press <kbd>Shift</kbd> + a color key (modifier configurable in Settings) to fill the entire background with that color. The fill is undoable.
+> Press <kbd>Shift</kbd> + a color key (modifier configurable in Settings) to fill the entire background with that color — useful for whiteboard, blackboard, or colored canvas effects. The fill is undoable.
 
 ## Background Fill
 
-Press the fill modifier key (default: <kbd>Shift</kbd>) together with a color hotkey to flood the screen background with a solid color. The fill is treated as a step in the undo/redo history — press <kbd>Ctrl</kbd>+<kbd>Z</kbd> to revert it.
+Press the fill modifier key (default: <kbd>Shift</kbd>) together with a color hotkey to fill the screen background with a solid color — great for whiteboard, blackboard, or colored canvas effects. The fill is treated as a step in the undo/redo history — press <kbd>Ctrl</kbd>+<kbd>Z</kbd> to revert it.
 
 The fill modifier key can be changed to Ctrl, Alt, or Win in Settings > Hotkeys.
 
@@ -217,7 +217,7 @@ app_icon.ico                    — Tray icon
 
 ### v1.6 20/03/2026
 
-- **Background Fill**: Press Shift (configurable) + a color hotkey to fill the screen background with a solid color. The fill is fully undoable/redoable. Clear (Esc) preserves the active fill color.
+- **Background Fill**: Press Shift (configurable) + a color hotkey to fill the screen background with a solid color — useful for whiteboard, blackboard, or colored canvas effects. The fill is fully undoable/redoable. Clear (Esc) preserves the active fill color.
 - **Configurable fill modifier**: The fill modifier key (Shift, Ctrl, Alt, Win) can be changed in Settings > Hotkeys.
 - **Freehand fix**: A very short freehand stroke (2 points) is no longer discarded.
 
