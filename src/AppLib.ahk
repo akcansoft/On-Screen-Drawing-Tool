@@ -45,7 +45,8 @@ class AppConfig {
 			ShowColorHints: true,
 			SaveLastUsedOnExit: true,
 			showHelpOnStartup: true,
-			MaxHistorySize: 200
+			MaxHistorySize: 200,
+			FillModifier: "+"
 		},
 		Hotkeys: {
 			ToggleDrawingMode: "^F9",
@@ -69,7 +70,7 @@ class AppConfig {
 	showColorHints := false
 	saveLastUsed := false
 	showHelpOnStartup := true
-	lastUsed := { W: 0, A: -1, C: "" }
+	fillModifier := "+"
 
 	hotkeys := {}
 
@@ -92,6 +93,7 @@ class AppConfig {
 		this.showColorHints := d.ShowColorHints
 		this.saveLastUsed := d.SaveLastUsedOnExit
 		this.showHelpOnStartup := d.showHelpOnStartup
+		this.fillModifier := d.FillModifier
 
 		iniSettings := IniRead(App.iniPath, "Settings", , "")
 		if (iniSettings != "") {
@@ -114,6 +116,10 @@ class AppConfig {
 							case "ShowColorHints": this.showColorHints := AppConfig._ParseBool(val)
 							case "SaveLastUsedOnExit": this.saveLastUsed := AppConfig._ParseBool(val)
 							case "showHelpOnStartup": this.showHelpOnStartup := AppConfig._ParseBool(val)
+							case "FillModifier":
+								static validMods := Map("+", true, "^", true, "!", true, "#", true)
+								if (validMods.Has(val))
+									this.fillModifier := val
 						}
 					} catch {
 						; Skip malformed values; defaults are already set above
@@ -122,16 +128,17 @@ class AppConfig {
 			}
 		}
 
+		hk := AppConfig.Defaults.Hotkeys
 		this.hotkeys := {
-			toggle: AppConfig.Defaults.Hotkeys.ToggleDrawingMode,
-			exit: AppConfig.Defaults.Hotkeys.ExitApp,
-			clear: AppConfig.Defaults.Hotkeys.ClearDrawing,
-			undo: AppConfig.Defaults.Hotkeys.UndoDrawing,
-			redo: AppConfig.Defaults.Hotkeys.RedoDrawing,
-			incLine: AppConfig.Defaults.Hotkeys.IncreaseLineWidth,
-			decLine: AppConfig.Defaults.Hotkeys.DecreaseLineWidth,
-			help: AppConfig.Defaults.Hotkeys.HotkeysHelp,
-			ortho: AppConfig.Defaults.Hotkeys.OrthoMode
+			toggle: hk.ToggleDrawingMode,
+			exit: hk.ExitApp,
+			clear: hk.ClearDrawing,
+			undo: hk.UndoDrawing,
+			redo: hk.RedoDrawing,
+			incLine: hk.IncreaseLineWidth,
+			decLine: hk.DecreaseLineWidth,
+			help: hk.HotkeysHelp,
+			ortho: hk.OrthoMode
 		}
 
 		iniHotkeys := IniRead(App.iniPath, "Hotkeys", , "")
@@ -163,6 +170,7 @@ class AppConfig {
 		}
 
 		iniLastUsed := IniRead(App.iniPath, "LastUsed", , "")
+		lastUsed := { W: 0, A: -1, C: "" }
 		if (iniLastUsed != "") {
 			for line in StrSplit(iniLastUsed, "`n", "`r") {
 				if (line = "")
@@ -173,9 +181,9 @@ class AppConfig {
 					val := Trim(parts[2])
 					try {
 						switch key {
-							case "LineWidth": this.lastUsed.W := Integer(val)
-							case "DrawAlpha": this.lastUsed.A := Integer(val)
-							case "Color": this.lastUsed.C := val
+							case "LineWidth": lastUsed.W := Integer(val)
+							case "DrawAlpha": lastUsed.A := Integer(val)
+							case "Color": lastUsed.C := val
 						}
 					} catch {
 						; Skip malformed last-used values; defaults remain
@@ -193,13 +201,13 @@ class AppConfig {
 		this.minPointStep := Max(this.minPointStep, 1)
 		this.maxHistorySize := Max(this.maxHistorySize, 10)  ; At least 10 undo steps
 
-		if (this.lastUsed.W >= this.line.minWidth && this.lastUsed.W <= this.line.maxWidth)
-			this.line.width := this.lastUsed.W
-		if (this.lastUsed.A >= 0 && this.lastUsed.A <= 255)
-			this.drawAlpha := this.lastUsed.A
-		if (this.lastUsed.C != "") {
+		if (lastUsed.W >= this.line.minWidth && lastUsed.W <= this.line.maxWidth)
+			this.line.width := lastUsed.W
+		if (lastUsed.A >= 0 && lastUsed.A <= 255)
+			this.drawAlpha := lastUsed.A
+		if (lastUsed.C != "") {
 			try {
-				this.lastUsedColorRGB := Integer(this.lastUsed.C)
+				this.lastUsedColorRGB := Integer(lastUsed.C)
 				this.hasLastUsedColor := true
 			}
 		}
@@ -212,32 +220,36 @@ class AppConfig {
 		return (val = "1" || val = "true" || val = "yes" || val = "on")
 	}
 
+	; Shorthand for IniWrite using the app's ini path.
+	_Write(value, section, key) => IniWrite(value, App.iniPath, section, key)
+
 	Save() {
 		try {
-			IniWrite(this.line.minWidth, App.iniPath, "Settings", "MinLineWidth")
-			IniWrite(this.line.maxWidth, App.iniPath, "Settings", "MaxLineWidth")
-			IniWrite(this.drawAlpha, App.iniPath, "Settings", "DrawAlpha")
-			IniWrite(this.frameIntervalMs, App.iniPath, "Settings", "FrameIntervalMs")
-			IniWrite(this.minPointStep, App.iniPath, "Settings", "MinPointStep")
-			IniWrite(this.maxHistorySize, App.iniPath, "Settings", "MaxHistorySize")
-			IniWrite(this.clearOnExitDraw ? "true" : "false", App.iniPath, "Settings", "ClearOnExitDraw")
-			IniWrite(this.showColorHints ? "true" : "false", App.iniPath, "Settings", "ShowColorHints")
-			IniWrite(this.saveLastUsed ? "true" : "false", App.iniPath, "Settings", "SaveLastUsedOnExit")
-			IniWrite(this.showHelpOnStartup ? "true" : "false", App.iniPath, "Settings", "showHelpOnStartup")
+			this._Write(this.line.minWidth, "Settings", "MinLineWidth")
+			this._Write(this.line.maxWidth, "Settings", "MaxLineWidth")
+			this._Write(this.drawAlpha, "Settings", "DrawAlpha")
+			this._Write(this.frameIntervalMs, "Settings", "FrameIntervalMs")
+			this._Write(this.minPointStep, "Settings", "MinPointStep")
+			this._Write(this.maxHistorySize, "Settings", "MaxHistorySize")
+			this._Write(this.clearOnExitDraw ? "true" : "false", "Settings", "ClearOnExitDraw")
+			this._Write(this.showColorHints ? "true" : "false", "Settings", "ShowColorHints")
+			this._Write(this.saveLastUsed ? "true" : "false", "Settings", "SaveLastUsedOnExit")
+			this._Write(this.showHelpOnStartup ? "true" : "false", "Settings", "showHelpOnStartup")
+			this._Write(this.fillModifier, "Settings", "FillModifier")
 
-			IniWrite(this.hotkeys.toggle, App.iniPath, "Hotkeys", "ToggleDrawingMode")
-			IniWrite(this.hotkeys.exit, App.iniPath, "Hotkeys", "ExitApp")
-			IniWrite(this.hotkeys.clear, App.iniPath, "Hotkeys", "ClearDrawing")
-			IniWrite(this.hotkeys.undo, App.iniPath, "Hotkeys", "UndoDrawing")
-			IniWrite(this.hotkeys.redo, App.iniPath, "Hotkeys", "RedoDrawing")
-			IniWrite(this.hotkeys.incLine, App.iniPath, "Hotkeys", "IncreaseLineWidth")
-			IniWrite(this.hotkeys.decLine, App.iniPath, "Hotkeys", "DecreaseLineWidth")
-			IniWrite(this.hotkeys.help, App.iniPath, "Hotkeys", "HotkeysHelp")
-			IniWrite(this.hotkeys.ortho, App.iniPath, "Hotkeys", "OrthoMode")
+			this._Write(this.hotkeys.toggle, "Hotkeys", "ToggleDrawingMode")
+			this._Write(this.hotkeys.exit, "Hotkeys", "ExitApp")
+			this._Write(this.hotkeys.clear, "Hotkeys", "ClearDrawing")
+			this._Write(this.hotkeys.undo, "Hotkeys", "UndoDrawing")
+			this._Write(this.hotkeys.redo, "Hotkeys", "RedoDrawing")
+			this._Write(this.hotkeys.incLine, "Hotkeys", "IncreaseLineWidth")
+			this._Write(this.hotkeys.decLine, "Hotkeys", "DecreaseLineWidth")
+			this._Write(this.hotkeys.help, "Hotkeys", "HotkeysHelp")
+			this._Write(this.hotkeys.ortho, "Hotkeys", "OrthoMode")
 
 			IniDelete(App.iniPath, "Colors")
 			for c in this.colors.List
-				IniWrite(Format("0x{:06X}", c.val), App.iniPath, "Colors", c.hk)
+				this._Write(Format("0x{:06X}", c.val), "Colors", c.hk)
 		} catch Error as e {
 			MsgBox("Failed to save settings: " e.Message, "Error", 48)
 		}
@@ -248,9 +260,9 @@ class AppConfig {
 		if (!this.saveLastUsed)
 			return
 		try {
-			IniWrite(this.line.width, App.iniPath, "LastUsed", "LineWidth")
-			IniWrite(this.drawAlpha, App.iniPath, "LastUsed", "DrawAlpha")
-			IniWrite(Format("0x{:06X}", currentColorARGB & 0xFFFFFF), App.iniPath, "LastUsed", "Color")
+			this._Write(this.line.width, "LastUsed", "LineWidth")
+			this._Write(this.drawAlpha, "LastUsed", "DrawAlpha")
+			this._Write(Format("0x{:06X}", currentColorARGB & 0xFFFFFF), "LastUsed", "Color")
 		}
 	}
 }
@@ -258,6 +270,17 @@ class AppConfig {
 ; Helper to reset font for a given GUI across the app
 _ResetUISettingsFont(guiObj) {
 	guiObj.SetFont("s9 w400", "Segoe UI")
+}
+
+; Set icon on a GUI window from a DLL/EXE resource
+_SetAppIcon(hwnd, iconFile, iconIdx) {
+	try {
+		hIcon := LoadPicture(iconFile, "Icon" iconIdx " w32 h32", &imgType)
+		if (hIcon) {
+			SendMessage(0x0080, 1, hIcon, , "ahk_id " hwnd)  ; WM_SETICON large
+			SendMessage(0x0080, 0, hIcon, , "ahk_id " hwnd)  ; WM_SETICON small
+		}
+	}
 }
 
 ; Safe GUI existence check helper

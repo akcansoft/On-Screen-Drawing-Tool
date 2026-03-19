@@ -1,6 +1,6 @@
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.5
+;@Ahk2Exe-SetFileVersion 1.6
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -9,10 +9,10 @@
 =========================
 On Screen Drawing Tool
 =========================
-A lightweight on-screen drawing tool for annotating the screen with
-lines, rectangles, ellipses, circles, arrows and freehand drawings.
+A lightweight on-screen drawing tool for annotating the screen with lines,
+rectangles, ellipses, circles, arrows, freehand drawings, and solid background fills.
 =========================
-Date: 19/03/2026
+Date: 20/03/2026
 Author: Mesut Akcan
 =========================
 github.com/akcansoft
@@ -33,7 +33,6 @@ https://github.com/akcansoft/On-Screen-Drawing-Tool
 #Include "Settings.ahk"
 #Include "Help.ahk"
 
-; Set custom icon for the tray menu
 if (!A_IsCompiled)
   try TraySetIcon(A_ScriptDir "\app_icon.ico")
 
@@ -42,11 +41,13 @@ CoordMode("Mouse", "Screen")
 
 App := {
   Name: "akcanSoft On Screen Drawing Tool",
-  Version: "1.5",
+  Version: "1.6",
   iniPath: A_ScriptDir "\settings.ini",
   githubRepo: "https://github.com/akcansoft/On-Screen-Drawing-Tool",
   helpWinTitle: "Help",
-  settingsWinTitle: "Settings"
+  settingsWinTitle: "Settings",
+  helpIcon: { file: "shell32.dll", idx: 24 },
+  settingsIcon: { file: "imageres.dll", idx: 110 }
 }
 
 cfg := AppConfig()
@@ -80,7 +81,6 @@ ui := {
 }
 
 gdi := GDIContext()
-
 gdi.Init() ; Initialize GDI+
 
 OnExit(OnAppExit)
@@ -107,33 +107,39 @@ if cfg.hotkeys.exit
 if cfg.hotkeys.help
   Hotkey(cfg.hotkeys.help, ShowHelp)
 
+; Only active when drawing toolbar is open
 HotIf (*) => WinActive("ahk_id " _SafeHwnd(ui.drawToolbar))
 Hotkey("Esc", CloseDrawToolbar)
 
+; Only active when drawing mode is on, mouse is on the active monitor,
+; and no conflicting windows are active (dialogs, toolbar, settings, help)
 HotIf (*) => state.drawingMode && IsMouseOnActiveMonitor()
   && !WinActive("ahk_class #32770")
   && !(_GuiExists(ui.drawToolbar) && WinActive("ahk_id " _SafeHwnd(ui.drawToolbar)))
   && !_IsAppSettingsOpen()
   && !_GuiExists(ui.helpGui)
 if cfg.hotkeys.clear
-  Hotkey(cfg.hotkeys.clear, ClearDrawing)
+  Hotkey(cfg.hotkeys.clear, ClearDrawing) ; Clear all shapes
 if cfg.hotkeys.undo
-  Hotkey(cfg.hotkeys.undo, DeleteLastShape)
+  Hotkey(cfg.hotkeys.undo, DeleteLastShape) ; Undo last shape
 if cfg.hotkeys.redo
-  Hotkey(cfg.hotkeys.redo, RedoLastShape)
+  Hotkey(cfg.hotkeys.redo, RedoLastShape) ; Redo last undone shape
 if cfg.hotkeys.incLine
-  Hotkey(cfg.hotkeys.incLine, AdjustLineWidthUp)
+  Hotkey(cfg.hotkeys.incLine, AdjustLineWidthUp) ; Increase line width
 if cfg.hotkeys.decLine
-  Hotkey(cfg.hotkeys.decLine, AdjustLineWidthDown)
-Hotkey("XButton1", DeleteLastShape)
-Hotkey("XButton2", RedoLastShape)
+  Hotkey(cfg.hotkeys.decLine, AdjustLineWidthDown) ; Decrease line width
+Hotkey("XButton1", DeleteLastShape) ; Mouse back button for undo
+Hotkey("XButton2", RedoLastShape) ; Mouse forward button for redo
 if cfg.hotkeys.ortho
-  Hotkey(cfg.hotkeys.ortho, ToggleOrthoMode)
-for item in cfg.colors.List
-  Hotkey(item.hk, SetDrawColor.Bind(item.val))
-Hotkey("WheelUp", AdjustLineWidthUp)
-Hotkey("WheelDown", AdjustLineWidthDown)
-HotIf
+  Hotkey(cfg.hotkeys.ortho, ToggleOrthoMode) ; Toggle ortho mode (straight lines) on/off
+for item in cfg.colors.List {
+  Hotkey(item.hk, SetDrawColor.Bind(item.val)) ; Set draw color based on hotkey
+  if (cfg.fillModifier != "")
+    Hotkey(cfg.fillModifier item.hk, FillBackground.Bind(item.val)) ; Fill background with color based on modifier + hotkey
+}
+Hotkey("WheelUp", AdjustLineWidthUp) ; Mouse wheel up to increase line width
+Hotkey("WheelDown", AdjustLineWidthDown) ; Mouse wheel down to decrease line width
+HotIf ;	 End of context-sensitive hotkeys
 
 ;=============================================
 CloseDrawToolbar(*) {
@@ -166,18 +172,14 @@ _ManageDrawToolbar(action := "hide", restoreCursor := true) {
     EnableDrawingCursor()
 }
 
-OnDrawToolbarClose(*) {
-  _ManageDrawToolbar("hide")
-}
-
-
 AdjustLineWidthUp(*) => AdjustLineWidth(1)
 AdjustLineWidthDown(*) => AdjustLineWidth(-1)
 
 ToggleOrthoMode(*) {
+  static _clearTip := () => ToolTip()
   state.orthoMode := !state.orthoMode
   ToolTip("Ortho: " (state.orthoMode ? "ON" : "OFF"))
-  SetTimer(() => ToolTip(), -1000)
+  SetTimer(_clearTip, -1000)
 }
 
 ; Start/Stop drawing mode from tray menu
@@ -196,17 +198,17 @@ StartDrawingFromTray(*) {
 
 ; Initialize tray menu
 InitTrayMenu() {
-  hkSuffix := "`t" FormatHotkeyLabel(cfg.hotkeys.toggle)
+  hkSuffix := cfg.hotkeys.toggle ? "`t" FormatHotkeyLabel(cfg.hotkeys.toggle) : ""
   ui.trayLabel := (state.drawingMode ? "Stop Drawing" : "Start Drawing") . hkSuffix
 
   A_TrayMenu.Delete()
 
-  AddMenuItem(App.helpWinTitle "`t" FormatHotkeyLabel(cfg.hotkeys.help), ShowHelp, "shell32.dll", 24)
-  AddMenuItem(App.settingsWinTitle, ShowAppSettings, "shell32.dll", 270)
+  AddMenuItem(App.helpWinTitle (cfg.hotkeys.help ? "`t" FormatHotkeyLabel(cfg.hotkeys.help) : ""), ShowHelp, App.helpIcon.file, App.helpIcon.idx)
+  AddMenuItem(App.settingsWinTitle, ShowAppSettings, App.settingsIcon.file, App.settingsIcon.idx)
   AddMenuItem("Restart Application", (*) => Reload(), "imageres.dll", 230)
   A_TrayMenu.Add()
   AddMenuItem(ui.trayLabel, StartDrawingFromTray, "imageres.dll", 365)
-  AddMenuItem("Exit`t" FormatHotkeyLabel(cfg.hotkeys.exit), (*) => ExitApp(), "shell32.dll", 28)
+  AddMenuItem("Exit" (cfg.hotkeys.exit ? "`t" FormatHotkeyLabel(cfg.hotkeys.exit) : ""), (*) => ExitApp(), "shell32.dll", 28)
 
   A_TrayMenu.Default := ui.trayLabel
 }
@@ -219,7 +221,7 @@ AddMenuItem(label, callback, iconFile := "", iconIdx := 0) {
 }
 
 UpdateTrayToggleMenu() {
-  hkSuffix := "`t" FormatHotkeyLabel(cfg.hotkeys.toggle)
+  hkSuffix := cfg.hotkeys.toggle ? "`t" FormatHotkeyLabel(cfg.hotkeys.toggle) : ""
   newLabel := (state.drawingMode ? "Stop Drawing" : "Start Drawing") . hkSuffix
 
   if (ui.trayLabel = newLabel)
@@ -267,8 +269,7 @@ ToggleDrawingMode(*) {
     height: mon.Height
   }
 
-  if (_GuiExists(ui.overlayGui))
-    try ui.overlayGui.Hide()
+  try ui.overlayGui.Hide()
   if (needsDelay)
     Sleep(250)
 
@@ -441,7 +442,7 @@ WM_LBUTTONDOWN(wParam, lParam, msg, hwnd) {
   if (hwnd != _SafeHwnd(ui.overlayGui))
     return
 
-  ; Close settings window if open and clicked outside
+  ; Close draw toolbar if open and clicked outside
   _ManageDrawToolbar("hide")
 
   GetOverlayPointFromLParam(lParam, &x, &y, true)
@@ -481,7 +482,7 @@ WM_LBUTTONDOWN(wParam, lParam, msg, hwnd) {
 }
 
 WM_LBUTTONUP(wParam, lParam, msg, hwnd) {
-  global ui, state, draw
+  global ui, state, draw, cfg
 
   if (!state.drawingMode || !_GuiExists(ui.overlayGui) || hwnd != _SafeHwnd(ui.overlayGui))
     return
@@ -497,7 +498,7 @@ WM_LBUTTONUP(wParam, lParam, msg, hwnd) {
 
   ; Skip invalid (single point or zero dimension) shapes
   valid := true
-  if (shapeToFinalize.type = "free" && shapeToFinalize.points.Length <= 2)
+  if (shapeToFinalize.type = "free" && shapeToFinalize.points.Length < 2)
     valid := false
   else if (shapeToFinalize.type != "free"
     && shapeToFinalize.startX = shapeToFinalize.endX
@@ -612,7 +613,7 @@ _CreateDrawToolbar() {
 
   ownerHwnd := _SafeHwnd(ui.overlayGui)
   ui.drawToolbar := Gui("+AlwaysOnTop +ToolWindow -Caption Border" (ownerHwnd ? " +Owner" ownerHwnd : ""))
-  ui.drawToolbar.OnEvent("Close", OnDrawToolbarClose)
+  ui.drawToolbar.OnEvent("Close", CloseDrawToolbar)
   _ResetUISettingsFont(ui.drawToolbar)
   margin := 10
   btnSize := 30
@@ -689,8 +690,7 @@ _CreateDrawToolbar() {
 
   btnExitDraw.GetPos(&dX, &dY, &dW, &dH)
   ui.drawToolbar.SetFont("s20")
-  chkExit := ui.drawToolbar.AddText("x" dX - 5 " y" dY - 10 " w" dW " h" dH " cRed +Center +0x200 BackgroundTrans +E0x20",
-    "✕")
+  ui.drawToolbar.AddText("x" dX - 5 " y" dY - 10 " w" dW " h" dH " cRed +Center +0x200 BackgroundTrans +E0x20", "✕")
   _ResetUISettingsFont(ui.drawToolbar)
 
   btnUndo.OnEvent("Click", (*) => DeleteLastShape())
@@ -754,7 +754,7 @@ ExitAppFromToolbar(*) {
 }
 
 ClearDrawing(*) {
-  global ui, gdi, state, draw
+  global state, draw, cfg
   if (!state.drawingMode)
     return
 
@@ -766,42 +766,52 @@ ClearDrawing(*) {
     SetTimer(UpdateTimer, 0)
   }
 
-  ; Check if there are any visible shapes to clear (items after the last clear marker)
+  ; Check if there are any visible shapes to clear (items after the last clear/fill marker)
   lastClearIdx := 0
-  for i, item in draw.history
-    if (IsObject(item) && item.HasProp("type") && item.type == "clear")
+  lastFillColor := -1
+  for i, item in draw.history {
+    if (!IsObject(item) || !item.HasProp("type"))
+      continue
+    if (item.type == "clear") {
       lastClearIdx := i
+      lastFillColor := -1
+    } else if (item.type == "fill") {
+      lastClearIdx := i
+      lastFillColor := item.color
+    }
+  }
   if (lastClearIdx >= draw.history.Length)
     return  ; Nothing visible to clear
 
-  ; Push a flat clear marker — just another step in the linear history
-  draw.history.Push({ type: "clear" })
-  ; ---- draw.redoStack := [] -----
+  ; If a fill is active, push a new fill (preserves background color) instead of a plain clear
+  while (draw.history.Length >= cfg.maxHistorySize)
+    draw.history.RemoveAt(1)
+  if (lastFillColor >= 0)
+    draw.history.Push({ type: "fill", color: lastFillColor })
+  else
+    draw.history.Push({ type: "clear" })
+  draw.redoStack := []
 
-  if (gdi.G_Baked)
-    DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", 0)
   RefreshBakedBuffer()
   UpdateBuffer()
   InvalidateOverlay()
 }
 
 DeleteLastShape(*) {
-  global ui, gdi, state, draw
+  global state, draw
   if (!state.drawingMode || !draw.history.Length)
     return
 
   ; Pop the last action (shape or clear marker) and move it to redo stack
   draw.redoStack.Push(draw.history.Pop())
 
-  if (gdi.G_Baked)
-    DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", 0)
   RefreshBakedBuffer()
   UpdateBuffer()
   InvalidateOverlay()
 }
 
 RedoLastShape(*) {
-  global ui, gdi, state, draw
+  global state, draw
   if (!state.drawingMode || !draw.redoStack.Length)
     return
 
@@ -809,8 +819,6 @@ RedoLastShape(*) {
   item := draw.redoStack.Pop()
   draw.history.Push(item)
 
-  if (gdi.G_Baked)
-    DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", 0)
   RefreshBakedBuffer()
   UpdateBuffer()
   InvalidateOverlay()
@@ -818,23 +826,40 @@ RedoLastShape(*) {
 
 AdjustLineWidth(delta) {
   static tooltipTimer := 0
+  static _clearTip := () => ToolTip()
   if (!state.drawingMode)
     return
   cfg.line.width := Max(Min(cfg.line.width + delta, cfg.line.maxWidth), cfg.line.minWidth)
   ToolTip("Width: " cfg.line.width)
   if (tooltipTimer)
     SetTimer(tooltipTimer, 0)
-  tooltipTimer := () => ToolTip()
+  tooltipTimer := _clearTip
   SetTimer(tooltipTimer, -1000)
 }
 
 SetDrawColor(colorRGB, *) {
   global state, draw, cfg
   if (!state.drawingMode)
-    return false
+    return
   rgb := colorRGB & 0xFFFFFF
   draw.color := ARGB(rgb, cfg.drawAlpha)
-  return true
+}
+
+FillBackground(colorRGB, *) {
+  global state, draw, cfg
+  if (!state.drawingMode)
+    return
+
+  fillShape := { type: "fill", color: colorRGB & 0xFFFFFF }
+
+  draw.redoStack := []
+  while (draw.history.Length >= cfg.maxHistorySize)
+    draw.history.RemoveAt(1)
+  draw.history.Push(fillShape)
+
+  RefreshBakedBuffer()
+  UpdateBuffer()
+  InvalidateOverlay()
 }
 
 ; Timer & Buffer Update
@@ -869,14 +894,30 @@ RefreshBakedBuffer() {
   if (!gdi.G_Baked || !gdi.hBitmapBackground || state.monitor.width <= 0 || state.monitor.height <= 0)
     return
 
-  ; Find the index of the last clear marker in the flat history
+  ; Find the index of the last clear or fill marker in the flat history
   lastClearIdx := 0
-  for i, item in draw.history
-    if (IsObject(item) && item.HasProp("type") && item.type == "clear")
+  lastFillColor := -1
+  for i, item in draw.history {
+    if (!IsObject(item) || !item.HasProp("type"))
+      continue
+    if (item.type == "clear") {
       lastClearIdx := i
+      lastFillColor := -1
+    } else if (item.type == "fill") {
+      lastClearIdx := i
+      lastFillColor := item.color
+    }
+  }
 
-  ; Draw background, then only the shapes that are visible (after the last clear)
-  Gdip_DrawImage(gdi.G_Baked, gdi.hBitmapBackground, 0, 0, state.monitor.width, state.monitor.height)
+  ; Draw background (screenshot or fill color), then visible shapes
+  if (lastFillColor >= 0) {
+    ; Fill with solid color instead of screenshot
+    solidColor := 0xFF000000 | lastFillColor
+    DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", solidColor)
+  } else {
+    Gdip_DrawImage(gdi.G_Baked, gdi.hBitmapBackground, 0, 0, state.monitor.width, state.monitor.height)
+  }
+
   if (lastClearIdx < draw.history.Length) {
     visibleShapes := []
     loop draw.history.Length - lastClearIdx
@@ -887,7 +928,7 @@ RefreshBakedBuffer() {
 
 _AppendShapeToBaked(shape) {
   global gdi, state
-  if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear")
+  if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear" || shape.type == "fill")
     return false
   if (!gdi.G_Baked || state.monitor.width <= 0 || state.monitor.height <= 0)
     return false
@@ -947,7 +988,7 @@ DrawShapesToGraphics(G, shapesArray) {
   static LineJoinRound := 2  ; GDI+ LineJoin enumeration (distinct from LineCap!)
 
   for index, shape in shapesArray {
-    if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear")
+    if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear" || shape.type == "fill")
       continue
 
     if (shape.color != lastPenColor || shape.width != lastPenWidth) {

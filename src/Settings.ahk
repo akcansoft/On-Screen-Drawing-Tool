@@ -1,4 +1,8 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
+
+; Shared fill modifier values (AHK symbol → display order)
+global _FillModValues := ["+", "^", "!", "#"]
+global _FillModLabels := ["Shift", "Ctrl", "Alt", "Win"]
 
 ; =============================================================================
 ; App Settings Window
@@ -32,7 +36,7 @@ _CreateAppSettingsGui() {
   win.OnEvent("Escape", _OnAppSettingsClose)
   ui.appSettingsGui := win
 
-  tabH := 330
+  tabH := 360
   tabY := 8
   btnY := tabY + tabH + 10
 
@@ -69,14 +73,14 @@ _CreateAppSettingsGui() {
 
   hkData := [
     ["toggle", "Toggle Drawing Mode:"],
-    ["exit", "Exit App:"],
     ["clear", "Clear Drawing:"],
     ["undo", "Undo:"],
     ["redo", "Redo:"],
     ["incLine", "Increase Line Width:"],
     ["decLine", "Decrease Line Width:"],
     ["ortho", "Ortho Mode (Line/Arrow):"],
-    ["help", "Help:"]
+    ["help", "Help:"],
+    ["exit", "Exit App:"]
   ]
 
   for i, row in hkData {
@@ -85,16 +89,27 @@ _CreateAppSettingsGui() {
     win.Add("Edit", "v" row[1] "_hk yp-3 x+5 w140", cfg.hotkeys.%row[1]%)
   }
 
+  win.Add("Text", "xm+15 y+14 w150", "Fill background modifier:")
+  fillModSel := 1
+  for i, v in _FillModValues {
+    if (v = cfg.fillModifier) {
+      fillModSel := i
+      break
+    }
+  }
+  win.Add("DropDownList", "vFillModifier x+5 yp-3 w80 Choose" fillModSel, _FillModLabels)
+
   ; ── COLORS TAB ───────────────────────────────────────────────────────────
   tabs.UseTab(3)
 
   win.Add("Text", "xm+15 y40 w430 c808080",
     "Double-click a row to edit.`nColor value: 6-digit hex without # (e.g. FF0000).")
-  lv := win.Add("ListView", "vColorLV xm+5 y+8 w300 h220 -Multi", ["Hotkey", "Color (Hex)"])
-  lv.ModifyCol(1, 80)
-  lv.ModifyCol(2, 190)
+  lv := win.Add("ListView", "vColorLV xm+5 y+8 w300 h250 -Multi Grid", ["Hotkey", "Color (Hex)"])
+  lv.ModifyCol(1, "AutoHdr")
   for item in cfg.colors.List
     lv.Add("", item.hk, Format("{:06X}", item.val & 0xFFFFFF))
+
+  lv.ModifyCol(2, "AutoHdr")
   lv.OnEvent("DoubleClick", (ctrl, row) => _EditColorRow(ctrl, row))
 
   win.Add("Button", "xm+5 y+6 w90", "Add").OnEvent("Click", (*) => _AddColorRow(lv))
@@ -108,6 +123,7 @@ _CreateAppSettingsGui() {
   win.Add("Button", "x+8   yp         w130", "Reset to Defaults").OnEvent("Click", (*) => _AppSettingsReset(win))
 
   win.Show("AutoSize Center")
+  _SetAppIcon(win.Hwnd, App.settingsIcon.file, App.settingsIcon.idx)
 }
 
 _OnAppSettingsClose(*) {
@@ -136,14 +152,14 @@ _AppSettingsOK(win) {
   ; ── Hotkeys: read from Edit controls (empty = no hotkey)
   hkFields := [
     ["toggle", "ToggleDrawingMode"],
-    ["exit", "ExitApp"],
-    ["clear", "ClearDrawing"],
+    ["ortho", "OrthoMode"],
     ["undo", "UndoDrawing"],
     ["redo", "RedoDrawing"],
+    ["clear", "ClearDrawing"],
     ["incLine", "IncreaseLineWidth"],
     ["decLine", "DecreaseLineWidth"],
-    ["ortho", "OrthoMode"],
-    ["help", "HotkeysHelp"]
+    ["help", "HotkeysHelp"],
+    ["exit", "ExitApp"]
   ]
   hotkeyChanged := false
   newHK := {}
@@ -199,6 +215,11 @@ _AppSettingsOK(win) {
   cfg.showColorHints := !!sv.ShowColorHints
   cfg.saveLastUsed := !!sv.SaveLastUsed
   cfg.showHelpOnStartup := !!sv.showHelpOnStartup
+  selIdx := win["FillModifier"].Value
+  newFillMod := (selIdx >= 1 && selIdx <= _FillModValues.Length) ? _FillModValues[selIdx] : cfg.fillModifier
+  if (newFillMod != cfg.fillModifier)
+    hotkeyChanged := true
+  cfg.fillModifier := newFillMod
   for pair in hkFields
     cfg.hotkeys.%pair[1]% := newHK.%pair[1]%
   draw.color := ARGB(draw.color & 0xFFFFFF, cfg.drawAlpha)
@@ -267,6 +288,7 @@ _AppSettingsReset(win) {
   win["ShowColorHints"].Value := s.ShowColorHints ? 1 : 0
   win["SaveLastUsed"].Value := s.SaveLastUsedOnExit ? 1 : 0
   win["showHelpOnStartup"].Value := s.showHelpOnStartup ? 1 : 0
+  win["FillModifier"].Value := 1  ; default: Shift
 
   ; Reset hotkey Edit controls
   win["toggle_hk"].Value := h.ToggleDrawingMode

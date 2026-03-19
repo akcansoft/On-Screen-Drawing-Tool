@@ -33,7 +33,7 @@ ShowHelp(*) {
 
   _ResetUISettingsFont(ui.helpGui)
   _txt := "A lightweight on-screen drawing tool for annotating the screen with lines, rectangles, ellipses, "
-  _txt .= "circles, arrows and freehand drawings."
+  _txt .= "circles, arrows, freehand drawings, and solid background fills."
   ui.helpGui.AddText("y+5 w350", _txt)
   _txt := "©2026 Mesut Akcan | makcan@gmail.com`n"
   _txt .= '<a href="' App.githubRepo '">GitHub Repository </a> | <a href="https://github.com/akcansoft">GitHub</a> | '
@@ -54,6 +54,8 @@ ShowHelp(*) {
   lv.Add("", "Toggle drawing mode", FormatHotkeyLabel(cfg.hotkeys.toggle))
   if (cfg.hotkeys.exit)
     lv.Add("", "Exit app", FormatHotkeyLabel(cfg.hotkeys.exit))
+  if (cfg.hotkeys.clear)
+    lv.Add("", "Clear drawing", FormatHotkeyLabel(cfg.hotkeys.clear))
   lv.Add("", "Toggle Ortho mode (Line/Arrow)", FormatHotkeyLabel(cfg.hotkeys.ortho))
 
   lv.Add("", "Draw Line", "Shift")
@@ -62,8 +64,6 @@ ShowHelp(*) {
   lv.Add("", "Draw Circle", "Ctrl+Alt")
   lv.Add("", "Draw Arrow", "Ctrl+Shift")
 
-  if (cfg.hotkeys.clear)
-    lv.Add("", "Clear drawing", FormatHotkeyLabel(cfg.hotkeys.clear))
   if (cfg.hotkeys.undo)
     lv.Add("", "Undo last shape", FormatHotkeyLabel(cfg.hotkeys.undo))
   if (cfg.hotkeys.redo)
@@ -78,10 +78,14 @@ ShowHelp(*) {
   lv.Add("", "Undo last shape", "Mouse Back")
   lv.Add("", "Redo last shape", "Mouse Forward")
 
-  if (colorKeys != "")
-    lv.Add("", "Color", colorKeys)
+  if (colorKeys != "") {
+    lv.Add("", "Set draw color", colorKeys)
+    static modLabels := Map("+", "Shift", "^", "Ctrl", "!", "Alt", "#", "Win")
+    fillModLabel := modLabels.Has(cfg.fillModifier) ? modLabels[cfg.fillModifier] : cfg.fillModifier
+    lv.Add("", "Fill background with color", fillModLabel " + color key")
+  }
 
-  lv.ModifyCol(1, 140)
+  lv.ModifyCol(1, 150)
 
   _ResetUISettingsFont(ui.helpGui)
   chkStartup := ui.helpGui.AddCheckbox("y+10 Checked" cfg.showHelpOnStartup,
@@ -94,6 +98,7 @@ ShowHelp(*) {
   btnSettings.OnEvent("Click", ShowAppSettings)
   ControlFocus(btnOk)
   ui.helpGui.Show()
+  _SetAppIcon(ui.helpGui.Hwnd, App.helpIcon.file, App.helpIcon.idx)
 }
 
 _OnHelpClose(*) {
