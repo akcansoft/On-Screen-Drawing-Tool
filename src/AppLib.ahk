@@ -46,7 +46,13 @@ class AppConfig {
 			SaveLastUsedOnExit: true,
 			showHelpOnStartup: true,
 			MaxHistorySize: 200,
-			FillModifier: "+"
+			FillModifier: "+",
+			; ── Text mode defaults ───────────────────────────────────────────
+			TextFont: "Segoe UI",
+			TextSize: 18,
+			TextBold: false,
+			TextItalic: false,
+			TextUnderline: false
 		},
 		Hotkeys: {
 			ToggleDrawingMode: "^F9",
@@ -57,7 +63,12 @@ class AppConfig {
 			IncreaseLineWidth: "^NumpadAdd",
 			DecreaseLineWidth: "^NumpadSub",
 			HotkeysHelp: "F1",
-			OrthoMode: "F8"
+			OrthoMode: "F8",
+			TextMode: "t", ; Enter text (typing) mode
+			ExitTextMode: "Esc",
+			DecreaseTextSize: "F2",
+			IncreaseTextSize: "F3",
+			CycleTextColor: "F4"
 		}
 	}
 
@@ -71,6 +82,9 @@ class AppConfig {
 	saveLastUsed := false
 	showHelpOnStartup := true
 	fillModifier := "+"
+
+	; ── Text mode settings ────────────────────────────────────────────────────
+	text := {}   ; .font  .size  .bold  .italic  .underline
 
 	hotkeys := {}
 
@@ -94,6 +108,16 @@ class AppConfig {
 		this.saveLastUsed := d.SaveLastUsedOnExit
 		this.showHelpOnStartup := d.showHelpOnStartup
 		this.fillModifier := d.FillModifier
+
+		; ── Text mode defaults ───────────────────────────────────────────────
+		this.text := {
+			font: d.TextFont,
+			size: d.TextSize,
+			bold: d.TextBold,
+			italic: d.TextItalic,
+			underline: d.TextUnderline,
+			charSet: 1   ; DEFAULT_CHARSET
+		}
 
 		iniSettings := IniRead(App.iniPath, "Settings", , "")
 		if (iniSettings != "") {
@@ -120,6 +144,21 @@ class AppConfig {
 								static validMods := Map("+", true, "^", true, "!", true, "#", true)
 								if (validMods.Has(val))
 									this.fillModifier := val
+								; ── Text mode ────────────────────────────────────────────────
+							case "TextFont":
+								if (val != "")
+									this.text.font := val
+							case "TextSize":
+								sz := Integer(val)
+								if (sz >= 6 && sz <= 200)
+									this.text.size := sz
+							case "TextBold": this.text.bold := AppConfig._ParseBool(val)
+							case "TextItalic": this.text.italic := AppConfig._ParseBool(val)
+							case "TextUnderline": this.text.underline := AppConfig._ParseBool(val)
+							case "TextCharSet":
+								cs := Integer(val)
+								if (cs >= 0 && cs <= 255)
+									this.text.charSet := cs
 						}
 					} catch {
 						; Skip malformed values; defaults are already set above
@@ -138,7 +177,12 @@ class AppConfig {
 			incLine: hk.IncreaseLineWidth,
 			decLine: hk.DecreaseLineWidth,
 			help: hk.HotkeysHelp,
-			ortho: hk.OrthoMode
+			ortho: hk.OrthoMode,
+			text: hk.TextMode,
+			exitText: hk.ExitTextMode,
+			decTextSize: hk.DecreaseTextSize,
+			incTextSize: hk.IncreaseTextSize,
+			cycleTextCol: hk.CycleTextColor
 		}
 
 		iniHotkeys := IniRead(App.iniPath, "Hotkeys", , "")
@@ -161,6 +205,11 @@ class AppConfig {
 							case "DecreaseLineWidth": this.hotkeys.decLine := val
 							case "HotkeysHelp": this.hotkeys.help := val
 							case "OrthoMode": this.hotkeys.ortho := val
+							case "TextMode": this.hotkeys.text := val
+							case "ExitTextMode": this.hotkeys.exitText := val
+							case "DecreaseTextSize": this.hotkeys.decTextSize := val
+							case "IncreaseTextSize": this.hotkeys.incTextSize := val
+							case "CycleTextColor": this.hotkeys.cycleTextCol := val
 						}
 					} catch {
 						; Skip malformed hotkey entries; defaults remain
@@ -199,7 +248,7 @@ class AppConfig {
 		this.drawAlpha := Max(Min(this.drawAlpha, 255), 0)
 		this.frameIntervalMs := Max(this.frameIntervalMs, 1)
 		this.minPointStep := Max(this.minPointStep, 1)
-		this.maxHistorySize := Max(this.maxHistorySize, 10)  ; At least 10 undo steps
+		this.maxHistorySize := Max(this.maxHistorySize, 10)
 
 		if (lastUsed.W >= this.line.minWidth && lastUsed.W <= this.line.maxWidth)
 			this.line.width := lastUsed.W
@@ -220,7 +269,6 @@ class AppConfig {
 		return (val = "1" || val = "true" || val = "yes" || val = "on")
 	}
 
-	; Shorthand for IniWrite using the app's ini path.
 	_Write(value, section, key) => IniWrite(value, App.iniPath, section, key)
 
 	Save() {
@@ -237,6 +285,13 @@ class AppConfig {
 			this._Write(this.showHelpOnStartup ? "true" : "false", "Settings", "showHelpOnStartup")
 			this._Write(this.fillModifier, "Settings", "FillModifier")
 
+			this._Write(this.text.font, "Settings", "TextFont")
+			this._Write(this.text.size, "Settings", "TextSize")
+			this._Write(this.text.bold ? "true" : "false", "Settings", "TextBold")
+			this._Write(this.text.italic ? "true" : "false", "Settings", "TextItalic")
+			this._Write(this.text.underline ? "true" : "false", "Settings", "TextUnderline")
+			this._Write(this.text.charSet, "Settings", "TextCharSet")
+
 			this._Write(this.hotkeys.toggle, "Hotkeys", "ToggleDrawingMode")
 			this._Write(this.hotkeys.exit, "Hotkeys", "ExitApp")
 			this._Write(this.hotkeys.clear, "Hotkeys", "ClearDrawing")
@@ -246,6 +301,11 @@ class AppConfig {
 			this._Write(this.hotkeys.decLine, "Hotkeys", "DecreaseLineWidth")
 			this._Write(this.hotkeys.help, "Hotkeys", "HotkeysHelp")
 			this._Write(this.hotkeys.ortho, "Hotkeys", "OrthoMode")
+			this._Write(this.hotkeys.text, "Hotkeys", "TextMode")
+			this._Write(this.hotkeys.exitText, "Hotkeys", "ExitTextMode")
+			this._Write(this.hotkeys.decTextSize, "Hotkeys", "DecreaseTextSize")
+			this._Write(this.hotkeys.incTextSize, "Hotkeys", "IncreaseTextSize")
+			this._Write(this.hotkeys.cycleTextCol, "Hotkeys", "CycleTextColor")
 
 			IniDelete(App.iniPath, "Colors")
 			for c in this.colors.List
@@ -285,24 +345,18 @@ _SetAppIcon(hwnd, iconFile, iconIdx) {
 
 ; Safe GUI existence check helper
 _GuiExists(guiObj) {
-	if (!IsObject(guiObj))
-		return false
-	try {
-		return WinExist("ahk_id " guiObj.Hwnd)
-	} catch {
-		return false
-	}
+	if (!guiObj)
+		return 0
+	if (!IsObject(guiObj) || !guiObj.HasProp("Hwnd") || !guiObj.Hwnd)
+		return 0
+	return WinExist("ahk_id " guiObj.Hwnd)
 }
 
 ; Safe Hwnd getter - returns 0 if GUI doesn't exist
 _SafeHwnd(guiObj) {
-	if (!IsObject(guiObj))
+	if (!guiObj)
 		return 0
-	try {
-		return guiObj.Hwnd
-	} catch {
-		return 0
-	}
+	return (IsObject(guiObj) && guiObj.HasProp("Hwnd")) ? guiObj.Hwnd : 0
 }
 
 ; Helper to format hotkey labels for display (e.g. "^+F12" -> "Ctrl+Shift+F12")
@@ -322,11 +376,6 @@ GetLuminance(rgb) {
 	g := (rgb >> 8) & 0xFF
 	b := rgb & 0xFF
 	return (0.299 * r) + (0.587 * g) + (0.114 * b)
-}
-
-SignedInt16(v) {
-	v := v & 0xFFFF
-	return (v & 0x8000) ? (v - 0x10000) : v
 }
 
 InitDpiAwareness() {
@@ -352,4 +401,13 @@ InitDpiAwareness() {
 	} catch {
 	}
 	return false
+}
+
+LoadSystemCursor(cursorId) {
+	static cursorCache := Map()
+	if (!cursorCache.Has(cursorId)) {
+		hCursor := DllCall("User32.dll\LoadCursor", "Ptr", 0, "Ptr", cursorId, "Ptr")
+		cursorCache[cursorId] := hCursor
+	}
+	return cursorCache[cursorId]
 }

@@ -184,12 +184,244 @@ DrawArrowGdip(G, pPen, pBrush, x1, y1, x2, y2, width) {
 	bx := x2 - (ux * hLen), by := y2 - (uy * hLen)
 	W1 := perpX * halfWid, W2 := perpY * halfWid
 
-	DllCall("gdiplus\GdipSetPenEndCap", "UPtr", pPen, "Int", 0)  ; Flat cap
+	DllCall("gdiplus\GdipSetPenEndCap", "UPtr", pPen, "Int", 0) ; Flat cap
 	Gdip_DrawLine(G, pPen, x1, y1, bx, by)
 
 	pPoints := x2 "," y2 "|" (bx + W1) "," (by + W2) "|" (bx - W1) "," (by - W2)
 	Gdip_FillPolygon(G, pBrush, pPoints)
 }
+
+DrawTextShapeGdip(G, shape) {
+	DllCall("gdiplus\GdipSetTextRenderingHint", "UPtr", G, "Int", 4) ; AntiAlias
+
+	fontName := shape.HasProp("font") ? shape.font : "Segoe UI"
+
+	DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", fontName, "UPtr", 0, "UPtr*", &pFamily := 0)
+	if (!pFamily) {
+		DllCall("gdiplus\GdipCreateFontFamilyFromName", "WStr", "Arial", "UPtr", 0, "UPtr*", &pFamily := 0)
+	}
+	if (!pFamily)
+		return
+
+	style := 0
+	if (shape.HasProp("bold") && shape.bold)
+		style |= 1
+	if (shape.HasProp("italic") && shape.italic)
+		style |= 2
+	if (shape.HasProp("underline") && shape.underline)
+		style |= 4
+
+	fontSize := shape.HasProp("size") ? shape.size : 18
+	DllCall("gdiplus\GdipCreateFont", "UPtr", pFamily, "Float", fontSize, "Int", style, "Int", 3, "UPtr*", &pFont := 0)
+	if (!pFont) {
+		DllCall("gdiplus\GdipDeleteFontFamily", "UPtr", pFamily)
+		return
+	}
+
+	pBrush := Gdip_BrushCreateSolid(shape.color)
+	DllCall("gdiplus\GdipCreateStringFormat", "Int", 0, "Int", 0, "UPtr*", &pFormat := 0)
+
+	lineH := Round(fontSize * A_ScreenDPI / 72 * 1.35)
+
+	for i, line in shape.lines {
+		displayLine := line
+		isLast := (i = shape.lines.Length)
+
+		if (shape.HasProp("showCursor") && shape.showCursor && isLast)
+			displayLine .= "|"
+		if (displayLine = "")
+			continue
+
+		lineY := shape.y + (i - 1) * lineH
+
+		rectF := Buffer(16, 0)
+		NumPut("Float", Float(shape.x), rectF, 0)
+		NumPut("Float", Float(lineY), rectF, 4)
+		NumPut("Float", 8000.0, rectF, 8)
+		NumPut("Float", Float(lineH * 2), rectF, 12)
+
+		DllCall("gdiplus\GdipDrawString",
+			"UPtr", G, "WStr", displayLine, "Int", -1,
+			"UPtr", pFont, "UPtr", rectF.Ptr, "UPtr", pFormat, "UPtr", pBrush)
+	}
+
+	DllCall("gdiplus\GdipFlush", "UPtr", G, "Int", 1)
+
+	if (pFormat)
+		DllCall("gdiplus\GdipDeleteStringFormat", "UPtr", pFormat)
+	if (pBrush)
+		Gdip_DeleteBrush(pBrush)
+	if (pFont)
+		DllCall("gdiplus\GdipDeleteFont", "UPtr", pFont)
+	if (pFamily)
+		DllCall("gdiplus\GdipDeleteFontFamily", "UPtr", pFamily)
+}
+
+UpdateBuffer() {
+	if (!gdi.G_Mem || !gdi.hdcBaked || !gdi.hdcMem || state.monitor.width <= 0 || state.monitor.height <= 0)
+		return
+
+	DllCall("BitBlt",
+		"Ptr", gdi.hdcMem, "Int", 0, "Int", 0, "Int", state.monitor.width, "Int", state.monitor.height,
+		"Ptr", gdi.hdcBaked, "Int", 0, "Int", 0, "UInt", 0x00CC0020)
+
+	if (state.drawing && IsObject(draw.currentShape) && draw.currentShape.HasProp("type"))
+		DrawShapesToGraphics(gdi.G_Mem, [draw.currentShape])
+
+	if (state.textMode)
+		DrawLiveText(gdi.G_Mem)
+}
+
+RefreshBakedBuffer() {
+	if (!gdi.G_Baked || !gdi.hBitmapBackground || state.monitor.width <= 0 || state.monitor.height <= 0)
+		return
+
+	_FindLastClearOrFill(&lastClearIdx, &lastFillColor)
+
+	if (lastFillColor >= 0) {
+		solidColor := 0xFF000000 | lastFillColor
+		DllCall("gdiplus\GdipGraphicsClear", "UPtr", gdi.G_Baked, "Int", solidColor)
+	} else {
+		Gdip_DrawImage(gdi.G_Baked, gdi.hBitmapBackground, 0, 0, state.monitor.width, state.monitor.height)
+	}
+
+	if (lastClearIdx < draw.history.Length) {
+		visibleShapes := []
+		loop draw.history.Length - lastClearIdx
+			visibleShapes.Push(draw.history[lastClearIdx + A_Index])
+		DrawShapesToGraphics(gdi.G_Baked, visibleShapes)
+	}
+}
+
+_AppendShapeToBaked(shape) {
+	if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear" || shape.type == "fill")
+		return false
+	if (!gdi.G_Baked || state.monitor.width <= 0 || state.monitor.height <= 0)
+		return false
+	try {
+		DrawShapesToGraphics(gdi.G_Baked, [shape])
+		return true
+	} catch {
+		return false
+	}
+}
+
+GetOverlayPointFromLParam(lParam, &x, &y, clampToOverlay := false) {
+	x := lParam << 48 >> 48
+	y := lParam << 32 >> 48
+	if (!clampToOverlay || state.monitor.width <= 0 || state.monitor.height <= 0)
+		return
+	x := Max(0, Min(x, state.monitor.width - 1))
+	y := Max(0, Min(y, state.monitor.height - 1))
+}
+
+_FindLastClearOrFill(&outIdx, &outColor) {
+	outIdx := 0
+	outColor := -1
+	i := draw.history.Length
+	while (i > 0) {
+		item := draw.history[i]
+		if (IsObject(item) && item.HasProp("type")) {
+			if (item.type == "clear") {
+				outIdx := i
+				outColor := -1
+				return
+			} else if (item.type == "fill") {
+				outIdx := i
+				outColor := item.color
+				return
+			}
+		}
+		i--
+	}
+}
+
+DrawShapesToGraphics(G, shapesArray) {
+	lastPenColor := -1, lastPenWidth := -1, pPen := 0
+	lastFreePenColor := -1, lastFreePenWidth := -1, pFreePen := 0
+	lastBrushColor := -1, pBrush := 0
+
+	static LineCapRound := 1
+	static LineJoinRound := 2
+
+	for index, shape in shapesArray {
+		if (!IsObject(shape) || !shape.HasProp("type") || shape.type == "clear" || shape.type == "fill")
+			continue
+
+		if (shape.type = "text") {
+			try DrawTextShapeGdip(G, shape)
+			continue
+		}
+
+		if (shape.type = "free") {
+			if (shape.color != lastFreePenColor || shape.width != lastFreePenWidth) {
+				if (pFreePen)
+					Gdip_DeletePen(pFreePen)
+				pFreePen := Gdip_CreatePen(shape.color, shape.width)
+				if (pFreePen) {
+					DllCall("gdiplus\GdipSetPenStartCap", "UPtr", pFreePen, "Int", LineCapRound)
+					DllCall("gdiplus\GdipSetPenEndCap", "UPtr", pFreePen, "Int", LineCapRound)
+					DllCall("gdiplus\GdipSetPenLineJoin", "UPtr", pFreePen, "Int", LineJoinRound)
+				}
+				lastFreePenColor := shape.color
+				lastFreePenWidth := shape.width
+			}
+		} else {
+			if (shape.color != lastPenColor || shape.width != lastPenWidth) {
+				if (pPen)
+					Gdip_DeletePen(pPen)
+				pPen := Gdip_CreatePen(shape.color, shape.width)
+				if (!pPen)
+					continue
+				lastPenColor := shape.color
+				lastPenWidth := shape.width
+			}
+		}
+
+		if (shape.type = "arrow" && shape.color != lastBrushColor) {
+			if (pBrush)
+				Gdip_DeleteBrush(pBrush)
+			pBrush := Gdip_BrushCreateSolid(shape.color)
+			if (pBrush)
+				lastBrushColor := shape.color
+		}
+
+		try {
+			switch shape.type {
+				case "free":
+					if (shape.HasProp("points") && shape.points.Length >= 2 && pFreePen)
+						Gdip_DrawLines(G, pFreePen, shape.pointsStr)
+				case "rect":
+					Gdip_DrawRectangle(G, pPen,
+						Min(shape.startX, shape.endX), Min(shape.startY, shape.endY),
+						Abs(shape.endX - shape.startX), Abs(shape.endY - shape.startY))
+				case "line":
+					Gdip_DrawLine(G, pPen, shape.startX, shape.startY, shape.endX, shape.endY)
+				case "ellipse":
+					Gdip_DrawEllipse(G, pPen,
+						Min(shape.startX, shape.endX), Min(shape.startY, shape.endY),
+						Abs(shape.endX - shape.startX), Abs(shape.endY - shape.startY))
+				case "circle":
+					Gdip_DrawEllipse(G, pPen,
+						shape.startX - shape.radius, shape.startY - shape.radius,
+						shape.radius * 2, shape.radius * 2)
+				case "arrow":
+					if (pBrush)
+						DrawArrowGdip(G, pPen, pBrush, shape.startX, shape.startY, shape.endX, shape.endY, shape.width)
+			}
+		} catch Error as e {
+			OutputDebug("GDI+ Drawing Error [type=" shape.type ", idx=" index "]: " e.Message "`n")
+		}
+	}
+
+	if (pPen)
+		Gdip_DeletePen(pPen)
+	if (pFreePen)
+		Gdip_DeletePen(pFreePen)
+	if (pBrush)
+		Gdip_DeleteBrush(pBrush)
+}
+
 
 ARGB(rgb, a) => (a << 24) | (rgb & 0xFFFFFF)
 
@@ -318,7 +550,6 @@ Gdip_DeleteGraphics(pGraphics) {
 ; GDI+ Graphics/Bitmap/Context Functions
 ;==============================================================================
 Gdip_BitmapFromScreen(Screen := 0, Raster := "") {
-	hhdc := 0
 	if (Screen = 0) {
 		_x := DllCall("GetSystemMetrics", "Int", 76)
 		_y := DllCall("GetSystemMetrics", "Int", 77)
@@ -339,9 +570,9 @@ Gdip_BitmapFromScreen(Screen := 0, Raster := "") {
 	chdc := CreateCompatibleDC()
 	hbm := CreateDIBSection(_w, _h, chdc)
 	obm := SelectObject(chdc, hbm)
-	hhdc := hhdc ? hhdc : GetDC()
+	hhdc := GetDC()
 	BitBlt(chdc, 0, 0, _w, _h, hhdc, _x, _y, Raster)
-	ReleaseDC(hhdc)  ; Screen DC: ReleaseDC only — DeleteDC must NOT be called on GetDC handles
+	ReleaseDC(hhdc) ; Screen DC: ReleaseDC only — DeleteDC must NOT be called on GetDC handles
 
 	pBitmap := Gdip_CreateBitmapFromHBITMAP(hbm)
 
@@ -491,7 +722,7 @@ MDMF_GetInfo(HMON) {
 GetMonitorInfo(MonitorNum) {
 	Monitors := MDMF_Enum()
 	for k, v in Monitors {
-		if (IsObject(v) && v.Num = MonitorNum) {  ; Skip non-object entries (TotalCount, Primary)
+		if (IsObject(v) && v.Num = MonitorNum) { ; Skip non-object entries (TotalCount, Primary)
 			return v
 		}
 	}
