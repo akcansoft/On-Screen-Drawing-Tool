@@ -253,6 +253,7 @@ Gdip.ahk                        — GDI+ wrapper library
 settings.ini                    — User configuration
 app_icon.ico                    — Tray icon
 ```
+## Version History
 
 ### v1.7 23/03/2026
 
