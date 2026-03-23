@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.6-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
+[![Version](https://img.shields.io/badge/Version-1.7-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/akcansoft/On-Screen-Drawing-Tool?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/akcansoft/On-Screen-Drawing-Tool?style=social)
@@ -12,7 +12,7 @@
 
 Lightweight on-screen annotation tool for Windows, built with AutoHotkey v2 and GDI+.
 
-Draw directly on top of any screen with multiple tools (freehand, line, rectangle, ellipse, circle, arrow), configurable hotkeys, background fill, and an INI-based settings system. Run it as source (`.ahk`) or as a compiled standalone `.exe`.
+Draw directly on top of any screen with multiple tools (freehand, line, rectangle, ellipse, circle, arrow), type text directly on the overlay, configurable hotkeys, background fill, and an INI-based settings system. Run it as source (`.ahk`) or as a compiled standalone `.exe`.
 
 ![](docs/screen-shot-1.png)
 
@@ -20,6 +20,7 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 
 - Fast overlay drawing with GDI+ anti-aliased rendering
 - Drawing tools: freehand, straight line, rectangle, ellipse, circle, arrow
+- **Text mode** — type text directly on the overlay; click to place, Enter for new line, configurable font, size, and color
 - **Ortho mode** (F8 by default) — locks line and arrow drawing to horizontal or vertical axis
 - **Background fill** — fill the screen with a solid color using a modifier + color hotkey, creating whiteboard, blackboard, or colored canvas effects (undoable)
 - Dynamic line width and opacity controls
@@ -52,8 +53,10 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
    - `On Screen Drawing.ahk`
    - `Gdip.ahk`
    - `AppLib.ahk`
+   - `CommonDialog.ahk`
    - `Settings.ahk`
    - `Help.ahk`
+   - `DrawText.ahk`
    - `settings.ini` (optional — defaults are applied automatically)
    - `app_icon.ico` (optional — used for the tray icon)
 3. Run `On Screen Drawing.ahk`.
@@ -85,10 +88,22 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 | <kbd>XButton1</kbd> (Mouse Back) | Undo last action |
 | <kbd>XButton2</kbd> (Mouse Forward) | Redo last undone action |
 | <kbd>F8</kbd> | Toggle Ortho mode (line/arrow only) |
+| <kbd>t</kbd> | Enter text mode |
 | <kbd>Ctrl</kbd>+<kbd>NumpadAdd</kbd> | Increase line width |
 | <kbd>Ctrl</kbd>+<kbd>NumpadSub</kbd> | Decrease line width |
 | <kbd>WheelUp</kbd> / <kbd>WheelDown</kbd> | Increase / decrease line width |
 | Right-click on overlay | Open drawing toolbar |
+
+### While in text mode
+
+| Hotkey / Action | Description |
+| --- | --- |
+| Left-click on overlay | Commit current text (if any) and place cursor at new position |
+| <kbd>Enter</kbd> | New line |
+| <kbd>Esc</kbd> | Commit text and exit text mode |
+| <kbd>F2</kbd> | Decrease font size |
+| <kbd>F3</kbd> | Increase font size |
+| <kbd>F4</kbd> | Cycle through palette colors |
 
 ### Tool selection (hold modifier while clicking to draw)
 
@@ -112,6 +127,17 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
 
 > Color hotkeys are only active while drawing mode is on and the mouse cursor is on the active monitor.
 > Press <kbd>Shift</kbd> + a color key (modifier configurable in Settings) to fill the entire background with that color — useful for whiteboard, blackboard, or colored canvas effects. The fill is undoable.
+
+## Text Mode
+
+Press <kbd>t</kbd> (configurable) while in drawing mode to enter text mode. The cursor changes to an I-beam.
+
+Click anywhere on the overlay to place a text cursor. Type your text — <kbd>Enter</kbd> inserts a new line. Clicking a different position commits the current text and starts a new one at the clicked location. Press <kbd>Esc</kbd> to commit and exit text mode. Committed text is added to the undo/redo history.
+
+While in text mode:
+- <kbd>F2</kbd> / <kbd>F3</kbd> decrease / increase the font size on the fly.
+- <kbd>F4</kbd> cycles through the configured color palette.
+- Font, size, bold, italic, and underline are configured in **Settings > Text** tab.
 
 ## Background Fill
 
@@ -164,6 +190,7 @@ Tabs:
 - **General** — numeric settings and behavior toggles
 - **Hotkeys** — all configurable hotkeys
 - **Colors** — color palette management (add, edit, delete entries)
+- **Text** — font picker (family, size, bold, italic, underline) with live preview
 
 ## settings.ini Reference
 
@@ -185,6 +212,11 @@ The app reads `settings.ini` from the script/exe directory on startup. Missing k
 | `ShowColorHints` | Show hotkey hints on color swatches | `true` |
 | `SaveLastUsedOnExit` | Remember color, width, opacity on exit | `true` |
 | `showHelpOnStartup` | Show help window on application start | `true` |
+| `TextFont` | Font family for text mode | `Segoe UI` |
+| `TextSize` | Font size for text mode (6–200) | `18` |
+| `TextBold` | Bold text | `false` |
+| `TextItalic` | Italic text | `false` |
+| `TextUnderline` | Underline text | `false` |
 
 ### [Hotkeys] keys
 
@@ -200,6 +232,11 @@ The app reads `settings.ini` from the script/exe directory on startup. Missing k
 | `OrthoMode` | Toggle ortho mode | `F8` |
 | `HotkeysHelp` | Show help window | `F1` |
 | `FillModifier` | Modifier key for background fill | `+` (Shift) |
+| `TextMode` | Enter text mode | `t` |
+| `ExitTextMode` | Commit text and exit text mode | `Esc` |
+| `DecreaseTextSize` | Decrease font size in text mode | `F2` |
+| `IncreaseTextSize` | Increase font size in text mode | `F3` |
+| `CycleTextColor` | Cycle text color through palette | `F4` |
 
 Hotkey syntax: `^` = Ctrl, `+` = Shift, `!` = Alt, `#` = Win. Example: `^+F9` = Ctrl+Shift+F9.
 
@@ -208,12 +245,22 @@ Hotkey syntax: `^` = Ctrl, `+` = Shift, `!` = Alt, `#` = Win. Example: `^+F9` = 
 ```
 On Screen Drawing.ahk           — Main script
 AppLib.ahk                      — Config classes and shared helpers
+CommonDialog.ahk                — Font and color picker dialog wrappers
 Settings.ahk                    — Settings window
 Help.ahk                        — Help window
+DrawText.ahk                    — Text mode implementation
 Gdip.ahk                        — GDI+ wrapper library
 settings.ini                    — User configuration
 app_icon.ico                    — Tray icon
 ```
+
+### v1.7 23/03/2026
+
+- **Text Mode**: Press `t` (configurable) in drawing mode to enter text mode. Click anywhere on the overlay to place a text cursor and start typing. Enter inserts a new line; Esc commits the text and exits text mode. Committed text is fully undoable/redoable.
+- **Font settings**: Font family, size, bold, italic, and underline are configurable in Settings > Text tab via a native font picker dialog with live preview.
+- **Text mode hotkeys**: Decrease/increase font size (F2/F3), cycle through palette colors (F4) — all configurable.
+- **New file**: `DrawText.ahk` contains all text mode logic. `CommonDialog.ahk` provides font and color picker dialog wrappers.
+- **Help window search**: The hotkeys list in the Help window now has a live search box — type to filter actions or hotkeys instantly.
 
 ### v1.6 20/03/2026
 
@@ -284,6 +331,10 @@ app_icon.ico                    — Tray icon
 **Shapes disappear when re-entering drawing mode**
 - Check that `ClearOnExitDraw` is set to `false` in `settings.ini`.
 - Note: switching to a different monitor always resets the shape history.
+
+**Text mode does not accept keyboard input**
+- Make sure no other window has focus. The overlay must be the active window while in text mode.
+- Try clicking on the overlay again to re-place the text cursor.
 
 ## Contributing
 
