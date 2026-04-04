@@ -3,7 +3,7 @@
 [![AutoHotkey](https://img.shields.io/badge/Language-AutoHotkey_v2-green.svg)](https://www.autohotkey.com/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-GPL-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.7-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
+[![Version](https://img.shields.io/badge/Version-1.8-brightgreen.svg)](https://github.com/akcansoft/On-Screen-Drawing-Tool/releases)
 
 ![GitHub stars](https://img.shields.io/github/stars/akcansoft/On-Screen-Drawing-Tool?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/akcansoft/On-Screen-Drawing-Tool?style=social)
@@ -25,10 +25,10 @@ Draw directly on top of any screen with multiple tools (freehand, line, rectangl
 - **Background fill** — fill the screen with a solid color using a modifier + color hotkey, creating whiteboard, blackboard, or colored canvas effects (undoable)
 - Dynamic line width and opacity controls
 - Color palette with single-key shortcuts (fully configurable via Settings)
-- Built-in hotkeys help dialog (<kbd>F1</kbd> by default, configurable)
+- Built-in always-on-top help dialog with searchable hotkeys list (<kbd>F1</kbd> by default, configurable)
 - **Undo / Redo** support for all drawing actions including clear and fill — full linear history, no steps lost
 - Clear all drawings with a single key; clear is itself undoable/redoable
-- Right-click drawing toolbar: color picker, line width, opacity, quick actions
+- Right-click drawing toolbar: color picker, line width, opacity, quick actions, and per-control tooltips
 - Pen cursor while drawing mode is active
 - **Always-on-top** help and settings windows that don't get lost behind the overlay
 - Multi-monitor support — starts on the monitor the mouse cursor is on
@@ -57,6 +57,7 @@ If you use the compiled `.exe`, **AutoHotkey installation** is not required.
    - `Settings.ahk`
    - `Help.ahk`
    - `DrawText.ahk`
+   - `CtrlToolTip.ahk`
    - `settings.ini` (optional — defaults are applied automatically)
    - `app_icon.ico` (optional — used for the tray icon)
 3. Run `On Screen Drawing.ahk`.
@@ -169,6 +170,7 @@ Right-clicking anywhere on the overlay opens a compact floating toolbar:
 - **Line width** — numeric edit field with up/down spinner.
 - **Opacity** — numeric edit field with up/down spinner (0–255).
 - **Quick action buttons:** Undo, Redo, Clear, Help, Stop Drawing, Exit App
+- **Tooltips:** line width, opacity, and action buttons show hover hints; configured hotkeys are included where applicable
 
 The toolbar snaps within the active monitor's bounds. Press <kbd>Esc</kbd> or click away to close it.
 
@@ -249,11 +251,18 @@ CommonDialog.ahk                — Font and color picker dialog wrappers
 Settings.ahk                    — Settings window
 Help.ahk                        — Help window
 DrawText.ahk                    — Text mode implementation
+CtrlToolTip.ahk                 — Helper for standard Windows tooltips on GUI controls
 Gdip.ahk                        — GDI+ wrapper library
 settings.ini                    — User configuration
 app_icon.ico                    — Tray icon
 ```
 ## Version History
+
+### v1.8 04/04/2026
+
+- **Toolbar tooltips**: Added standard Windows tooltips to the compact drawing toolbar controls using `CtrlToolTip.ahk`.
+- **Better toolbar guidance**: Hovering line width, opacity, undo, redo, clear, help, stop drawing, and exit app controls now explains each action and shows assigned hotkeys where relevant.
+- **Help/About polish**: The always-on-top Help window remains the central searchable reference for app actions and hotkeys.
 
 ### v1.7 23/03/2026
 
