@@ -47,8 +47,8 @@ ShowHelp(*) {
 	edtSearch := ui.helpGui.AddEdit("x+10 ys-3 w250 BackgroundFFFFEF vHkSearch")
 	SendMessage(0x1501, 1, StrPtr("Search..."), edtSearch.Hwnd) ; EM_SETCUEBANNER
 
-	ui.helpGui.SetFont("s10", "Segoe MDL2 Assets")
-	btnClear := ui.helpGui.AddButton("x+2 yp w30 h24", Chr(0xE894)) ; Clear
+	ui.helpGui.SetFont("s18", "Segoe MDL2 Assets")
+	btnClear := ui.helpGui.AddButton("x+2 yp w30 h24", Chr(0xE926)) ; Clear
 	_ResetUISettingsFont(ui.helpGui)
 
 	lv := ui.helpGui.AddListView("xs y+5 w350 r18 -Multi +Grid +NoSortHdr vHkListView", ["Action", "Hotkey(s)"])

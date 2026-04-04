@@ -6,7 +6,7 @@ A lightweight on-screen drawing tool for annotating the screen with lines,
 rectangles, ellipses, circles, arrows, freehand drawings, solid background fills,
 and on-screen text.
 =========================
-Date: 23/03/2026
+Date: 04/04/2026
 Author: Mesut Akcan
 =========================
 github.com/akcansoft
@@ -24,7 +24,7 @@ https://github.com/akcansoft/On-Screen-Drawing-Tool
 
 ;@Ahk2Exe-SetName On Screen Drawing Tool
 ;@Ahk2Exe-SetDescription Lightweight screen annotation tool
-;@Ahk2Exe-SetFileVersion 1.7
+;@Ahk2Exe-SetFileVersion 1.8
 ;@Ahk2Exe-SetCompanyName akcanSoft
 ;@Ahk2Exe-SetCopyright ©2026 Mesut Akcan
 ;@Ahk2Exe-SetMainIcon app_icon.ico
@@ -35,6 +35,7 @@ https://github.com/akcansoft/On-Screen-Drawing-Tool
 #Include "Settings.ahk"
 #Include "Help.ahk"
 #Include "DrawText.ahk"
+#Include "CtrlToolTip.ahk"
 
 if (!A_IsCompiled)
 	try TraySetIcon(A_ScriptDir "\app_icon.ico")
@@ -44,7 +45,7 @@ CoordMode("Mouse", "Screen")
 
 App := {
 	Name: "akcanSoft On Screen Drawing Tool",
-	Version: "1.7",
+	Version: "1.8",
 	iniPath: A_ScriptDir "\settings.ini",
 	githubRepo: "https://github.com/akcansoft/On-Screen-Drawing-Tool",
 	helpWinTitle: "Help",
@@ -663,13 +664,14 @@ _CreateDrawToolbar() {
 	ui.drawToolbar.AddText("x" margin " y" (gridBottom + 5), "Line width:")
 	ui.lineWidthCtrl := ui.drawToolbar.AddEdit("vLineWidth yp-5 w40 x+2 Number", cfg.line.width)
 	ui.lineWidthCtrl.OnEvent("Change", (*) => UpdateLineWidth(ui.drawToolbar))
-	ui.drawToolbar.AddUpDown("Range" cfg.line.minWidth "-" cfg.line.maxWidth, cfg.line.width).OnEvent("Change",
-		(*) => UpdateLineWidth(ui.drawToolbar))
+	lineWidthSpin := ui.drawToolbar.AddUpDown("Range" cfg.line.minWidth "-" cfg.line.maxWidth, cfg.line.width)
+	lineWidthSpin.OnEvent("Change", (*) => UpdateLineWidth(ui.drawToolbar))
 
 	ui.drawToolbar.AddText("x" margin " y+12", "Opacity:")
 	ui.drawAlphaCtrl := ui.drawToolbar.AddEdit("vDrawAlpha yp-5 w50 x+6 Number", cfg.drawAlpha)
 	ui.drawAlphaCtrl.OnEvent("Change", (*) => UpdateDrawAlpha(ui.drawToolbar))
-	ui.drawToolbar.AddUpDown("Range0-255", cfg.drawAlpha).OnEvent("Change", (*) => UpdateDrawAlpha(ui.drawToolbar))
+	drawAlphaSpin := ui.drawToolbar.AddUpDown("Range0-255", cfg.drawAlpha)
+	drawAlphaSpin.OnEvent("Change", (*) => UpdateDrawAlpha(ui.drawToolbar))
 
 	btnOpt := " w30 h30 +Border +Center +0x200 +0x100 BackgroundFAFAFA"
 	iconFont := "Segoe MDL2 Assets"
@@ -701,6 +703,52 @@ _CreateDrawToolbar() {
 	btnHelp.OnEvent("Click", (*) => ShowHelp())
 	btnExitDraw.OnEvent("Click", (*) => ExitDrawingFromToolbar())
 	btnExitApp.OnEvent("Click", (*) => ExitAppFromToolbar())
+
+	lineWidthTip := "Line width (" cfg.line.minWidth "-" cfg.line.maxWidth ")"
+	if (cfg.hotkeys.incLine || cfg.hotkeys.decLine) {
+		lineWidthKeys := ""
+		if (cfg.hotkeys.incLine)
+			lineWidthKeys .= FormatHotkeyLabel(cfg.hotkeys.incLine)
+		if (cfg.hotkeys.decLine)
+			lineWidthKeys .= (lineWidthKeys ? " / " : "") FormatHotkeyLabel(cfg.hotkeys.decLine)
+		lineWidthTip .= "`nHotkeys: " lineWidthKeys
+	}
+	lineWidthTip .= "`nMouse wheel: change width"
+	CtrlToolTip(ui.lineWidthCtrl, lineWidthTip)
+	CtrlToolTip(lineWidthSpin, lineWidthTip)
+
+	opacityTip := "Opacity (0-255)"
+	CtrlToolTip(ui.drawAlphaCtrl, opacityTip)
+	CtrlToolTip(drawAlphaSpin, opacityTip)
+
+	undoTip := "Undo last shape"
+	if (cfg.hotkeys.undo)
+		undoTip .= "`nHotkey: " FormatHotkeyLabel(cfg.hotkeys.undo)
+	undoTip .= "`nMouse: XButton1"
+	CtrlToolTip(btnUndo, undoTip)
+
+	redoTip := "Redo last shape"
+	if (cfg.hotkeys.redo)
+		redoTip .= "`nHotkey: " FormatHotkeyLabel(cfg.hotkeys.redo)
+	redoTip .= "`nMouse: XButton2"
+	CtrlToolTip(btnRedo, redoTip)
+
+	clearTip := "Clear drawing"
+	if (cfg.hotkeys.clear)
+		clearTip .= "`nHotkey: " FormatHotkeyLabel(cfg.hotkeys.clear)
+	CtrlToolTip(btnClear, clearTip)
+
+	helpTip := "Show help"
+	if (cfg.hotkeys.help)
+		helpTip .= "`nHotkey: " FormatHotkeyLabel(cfg.hotkeys.help)
+	CtrlToolTip(btnHelp, helpTip)
+
+	CtrlToolTip(btnExitDraw, "Exit drawing mode")
+
+	exitAppTip := "Exit application"
+	if (cfg.hotkeys.exit)
+		exitAppTip .= "`nHotkey: " FormatHotkeyLabel(cfg.hotkeys.exit)
+	CtrlToolTip(btnExitApp, exitAppTip)
 }
 
 _UpdateDrawToolbar() {
